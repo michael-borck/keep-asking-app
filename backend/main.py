@@ -19,38 +19,24 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Optional: import the AI client
-try:
-    from anthropic import Anthropic
-    HAS_ANTHROPIC = True
-except ImportError:
-    HAS_ANTHROPIC = False
-
-try:
-    from openai import OpenAI
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
+from anthropic import Anthropic
 
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-# Which provider to use: "anthropic" or "openai"
-AI_PROVIDER = os.getenv("AI_PROVIDER", "anthropic")
-
-# API keys - set via environment variables, never hardcode in production
+# API key - from environment or .env file
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# Models
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+# Model - haiku for prototyping, override in .env for production
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
 # Nudge variants - randomly selected each turn to reduce habituation.
 # All variants follow the same design principles:
@@ -173,38 +159,17 @@ def log_turn(session_code: str, role: str, content: str, turn_number: int):
 
 
 def call_ai(messages: list[dict], system: str) -> str:
-    """Call the configured AI provider and return the response text."""
-
-    if AI_PROVIDER == "anthropic":
-        if not HAS_ANTHROPIC:
-            raise HTTPException(500, "anthropic package not installed")
-        if not ANTHROPIC_API_KEY:
-            raise HTTPException(500, "ANTHROPIC_API_KEY not set")
-        client = Anthropic(api_key=ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=1024,
-            system=system,
-            messages=messages,
-        )
-        return response.content[0].text
-
-    elif AI_PROVIDER == "openai":
-        if not HAS_OPENAI:
-            raise HTTPException(500, "openai package not installed")
-        if not OPENAI_API_KEY:
-            raise HTTPException(500, "OPENAI_API_KEY not set")
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        oai_messages = [{"role": "system", "content": system}] + messages
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            max_tokens=1024,
-            messages=oai_messages,
-        )
-        return response.choices[0].message.content
-
-    else:
-        raise HTTPException(500, f"Unknown AI_PROVIDER: {AI_PROVIDER}")
+    """Call Claude and return the response text."""
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(500, "ANTHROPIC_API_KEY not set")
+    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=1024,
+        system=system,
+        messages=messages,
+    )
+    return response.content[0].text
 
 
 # ---------------------------------------------------------------------------
@@ -373,3 +338,20 @@ def deidentify():
         json.dump(destruction_log, f, indent=2)
 
     return {"message": f"Linkage table destroyed. {count} records removed.", "timestamp": timestamp}
+
+
+# ---------------------------------------------------------------------------
+# Static file serving (production: built React frontend in ./static)
+# ---------------------------------------------------------------------------
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+if STATIC_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        file_path = STATIC_DIR / path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(STATIC_DIR / "index.html")
