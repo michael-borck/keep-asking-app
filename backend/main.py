@@ -291,9 +291,32 @@ def list_sessions():
     }
 
 
+@app.get("/api/history/{session_code}")
+def get_history(session_code: str):
+    """
+    Return the conversation history for a session (what the student saw).
+    Used by the frontend to restore chat after a page reload.
+    """
+    session = sessions.get(session_code)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    # Rebuild the display history from the log file
+    log_path = DATA_DIR / f"{session_code}.jsonl"
+    messages = []
+    if log_path.exists():
+        for line in log_path.read_text().strip().split("\n"):
+            entry = json.loads(line)
+            if entry["role"] == "user":
+                messages.append({"role": "user", "content": entry["content"]})
+            elif entry["role"] == "assistant_display":
+                messages.append({"role": "assistant", "content": entry["content"]})
+    return {"messages": messages, "turn_count": session["turn_count"]}
+
+
 @app.get("/api/export/{session_code}")
 def export_session(session_code: str):
-    """Export full transcript for a session."""
+    """Export full transcript for a session (admin)."""
     log_path = DATA_DIR / f"{session_code}.jsonl"
     if not log_path.exists():
         raise HTTPException(404, "Session log not found")

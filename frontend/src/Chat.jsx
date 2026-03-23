@@ -11,6 +11,28 @@ export default function Chat({ session }) {
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Restore conversation history after page reload
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/history/${session.sessionCode}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages.length > 0) {
+            setMessages(data.messages);
+            setTurnCount(data.turn_count);
+          }
+        }
+      } catch {
+        // Silent fail - just start fresh
+      }
+    }
+    fetchHistory();
+  }, [session.sessionCode]);
+
+  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
