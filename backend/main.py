@@ -52,12 +52,33 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
-# The nudge text appended to every AI response in the nudge condition
-NUDGE_TEXT = (
-    "\n\n---\n"
-    "*Does that match what you expected? "
-    "If something seems off, tell me what seems wrong.*"
-)
+# Nudge variants - randomly selected each turn to reduce habituation.
+# All variants follow the same design principles:
+#   - Invite pushback, not confirmation
+#   - Domain-agnostic (work across IS, Supply Chain, Marketing)
+#   - No prior AI experience assumed
+#   - Make the conversational path easier, not mandatory
+NUDGE_VARIANTS = [
+    "Does that match what you expected? If something seems off, tell me what seems wrong.",
+    "Before you move on - does that actually answer your question, or just part of it?",
+    "Is there anything in that response that doesn't quite fit with what you already know?",
+    "What would you challenge in that answer if you were reviewing someone else's work?",
+    "Does that feel complete, or is there a gap worth pushing on?",
+    "If you had to argue the opposite, what would you say?",
+    "Is that specific enough to be useful, or is it still too general?",
+    "What's the weakest part of that response?",
+    "Does that account for the details in your task, or is it a generic answer?",
+    "Would you trust that answer enough to use it without checking? Why or why not?",
+]
+
+NUDGE_PREFIX = "\n\n---\n*"
+NUDGE_SUFFIX = "*"
+
+
+def get_nudge() -> str:
+    """Return a randomly selected nudge, formatted for display."""
+    variant = random.choice(NUDGE_VARIANTS)
+    return f"{NUDGE_PREFIX}{variant}{NUDGE_SUFFIX}"
 
 # System prompt: suppresses the model's natural tendency to append
 # follow-up suggestions, offers to elaborate, or engagement hooks.
@@ -265,7 +286,7 @@ def chat(req: ChatRequest):
 
     # Append nudge if nudge condition
     if session["condition"] == "nudge":
-        display_response = ai_response + NUDGE_TEXT
+        display_response = ai_response + get_nudge()
     else:
         display_response = ai_response
 
