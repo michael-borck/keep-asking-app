@@ -5,21 +5,18 @@ Handles:
 - Student login (student number -> session code + condition assignment)
 - Chat relay to frontier model (with system prompt suppressing engagement hooks)
 - Nudge append for nudge condition (server-side, invisible to model)
-- Full transcript logging (every turn, timestamped)
+- Full transcript logging (SQLite)
 - Session export and de-identification
 
 Run: uvicorn main:app --reload --port 8000
 """
 
-import json
 import os
 import random
 import string
-import time
-from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,23 +24,20 @@ from pydantic import BaseModel
 
 from anthropic import Anthropic
 
+import db
+
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-# API key - from environment or .env file
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-
-# Model - haiku for prototyping, override in .env for production
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
+# Test student number - always accepted, flagged as test data
+TEST_STUDENT = "TEST000"
+
 # Nudge variants - randomly selected each turn to reduce habituation.
-# All variants follow the same design principles:
-#   - Invite pushback, not confirmation
-#   - Domain-agnostic (work across IS, Supply Chain, Marketing)
-#   - No prior AI experience assumed
-#   - Make the conversational path easier, not mandatory
 NUDGE_VARIANTS = [
     "Does that match what you expected? If something seems off, tell me what seems wrong.",
     "Before you move on - does that actually answer your question, or just part of it?",
@@ -62,12 +56,10 @@ NUDGE_SUFFIX = "*"
 
 
 def get_nudge() -> str:
-    """Return a randomly selected nudge, formatted for display."""
     variant = random.choice(NUDGE_VARIANTS)
     return f"{NUDGE_PREFIX}{variant}{NUDGE_SUFFIX}"
 
-# System prompt: suppresses the model's natural tendency to append
-# follow-up suggestions, offers to elaborate, or engagement hooks.
+
 SYSTEM_PROMPT = """You are an AI assistant helping a university student complete a structured task.
 
 IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE STYLE:
@@ -80,7 +72,6 @@ IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE STYLE:
 
 Your goal is to be helpful and accurate, but to let the student drive the conversation. If they want more, they will ask."""
 
-# Data directory for logs
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -98,11 +89,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory session store (use a database for production)
-sessions: dict[str, dict] = {}
+# In-memory conversation histories keyed by session_code.
+# Only used for building the messages list sent to the AI model.
+# Everything persistent lives in SQLite.
+_conversation_cache: dict[str, list[dict]] = {}
 
-# Linkage table (student_number -> session_code) - destroyed after de-identification
-linkage_table: dict[str, str] = {}
+
+@app.on_event("startup")
+def startup():
+    db.init_db(DATA_DIR)
 
 
 # ---------------------------------------------------------------------------
@@ -111,18 +106,15 @@ linkage_table: dict[str, str] = {}
 
 class LoginRequest(BaseModel):
     student_number: str
-    condition: str | None = None  # "nudge" or "control"; if None, randomly assigned
-
+    condition: str | None = None
 
 class LoginResponse(BaseModel):
     session_code: str
-    condition: str  # "nudge" or "control" - NOT sent to student in production
-
+    condition: str
 
 class ChatRequest(BaseModel):
     session_code: str
     message: str
-
 
 class ChatResponse(BaseModel):
     reply: str
@@ -134,32 +126,14 @@ class ChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def generate_session_code() -> str:
-    """Generate a random 8-character alphanumeric session code."""
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 
 def assign_condition() -> str:
-    """Randomly assign nudge or control with equal probability."""
     return random.choice(["nudge", "control"])
 
 
-def log_turn(session_code: str, role: str, content: str, turn_number: int):
-    """Append a turn to the session's log file."""
-    log_path = DATA_DIR / f"{session_code}.jsonl"
-    entry = {
-        "session_code": session_code,
-        "turn_number": turn_number,
-        "role": role,
-        "content": content,
-        "timestamp": datetime.utcnow().isoformat(),
-        "epoch": time.time(),
-    }
-    with open(log_path, "a") as f:
-        f.write(json.dumps(entry) + "\n")
-
-
 def call_ai(messages: list[dict], system: str) -> str:
-    """Call Claude and return the response text."""
     if not ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY not set")
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -172,60 +146,56 @@ def call_ai(messages: list[dict], system: str) -> str:
     return response.content[0].text
 
 
+def _get_conversation(session_code: str) -> list[dict]:
+    """Return the in-memory conversation history, rebuilding from DB if needed."""
+    if session_code not in _conversation_cache:
+        transcript = db.get_full_transcript(session_code)
+        messages = []
+        for t in transcript:
+            if t["role"] == "user":
+                messages.append({"role": "user", "content": t["content"]})
+            elif t["role"] == "assistant_raw":
+                messages.append({"role": "assistant", "content": t["content"]})
+        _conversation_cache[session_code] = messages
+    return _conversation_cache[session_code]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 @app.post("/api/login", response_model=LoginResponse)
 def login(req: LoginRequest):
-    """
-    Student enters their student number.
-    Returns a session code and assigns a condition.
-    The student number is stored in the linkage table only.
-    """
     student_number = req.student_number.strip()
     if not student_number:
         raise HTTPException(400, "Student number is required")
 
-    # Check if this student already has a session
-    if student_number in linkage_table:
-        session_code = linkage_table[student_number]
-        session = sessions[session_code]
-        return LoginResponse(
-            session_code=session_code,
-            condition=session["condition"],
-        )
+    is_test = student_number.upper() == TEST_STUDENT
+
+    # Check if this student already has a session (skip for test — always new)
+    if not is_test:
+        existing = db.get_session_code_for_student(student_number)
+        if existing:
+            session = db.get_session(existing)
+            return LoginResponse(session_code=existing, condition=session["condition"])
 
     session_code = generate_session_code()
-    if req.condition in ("nudge", "control"):
-        condition = req.condition
-    else:
-        condition = assign_condition()
+    condition = req.condition if req.condition in ("nudge", "control") else assign_condition()
 
-    # Store linkage (for equity flag matching later)
-    linkage_table[student_number] = session_code
+    db.create_session(session_code, condition, is_test)
 
-    # Store session (no student number here - only session code)
-    sessions[session_code] = {
-        "condition": condition,
-        "messages": [],  # conversation history for AI context
-        "turn_count": 0,
-        "created_at": datetime.utcnow().isoformat(),
-    }
+    if not is_test:
+        db.create_linkage(student_number, session_code)
 
-    # Log the session start
-    log_turn(session_code, "system", f"Session started. Condition: {condition}", 0)
+    label = "TEST session" if is_test else "Session"
+    db.log_turn(session_code, "system", f"{label} started. Condition: {condition}", 0)
 
     return LoginResponse(session_code=session_code, condition=condition)
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    """
-    Student sends a message. Backend relays to AI, optionally appends nudge,
-    logs everything, returns response.
-    """
-    session = sessions.get(req.session_code)
+    session = db.get_session(req.session_code)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -233,21 +203,19 @@ def chat(req: ChatRequest):
     if not message:
         raise HTTPException(400, "Message is required")
 
-    # Increment turn count
-    session["turn_count"] += 1
-    turn_number = session["turn_count"]
+    # Determine turn number from existing turns
+    conversation = _get_conversation(req.session_code)
+    turn_number = sum(1 for m in conversation if m["role"] == "user") + 1
 
-    # Log student turn
-    log_turn(req.session_code, "user", message, turn_number)
-
-    # Add to conversation history
-    session["messages"].append({"role": "user", "content": message})
+    # Log and append user message
+    db.log_turn(req.session_code, "user", message, turn_number)
+    conversation.append({"role": "user", "content": message})
 
     # Call AI
-    ai_response = call_ai(session["messages"], SYSTEM_PROMPT)
+    ai_response = call_ai(conversation, SYSTEM_PROMPT)
 
-    # Log the raw AI response (before nudge)
-    log_turn(req.session_code, "assistant_raw", ai_response, turn_number)
+    # Log raw AI response
+    db.log_turn(req.session_code, "assistant_raw", ai_response, turn_number)
 
     # Append nudge if nudge condition
     if session["condition"] == "nudge":
@@ -255,89 +223,46 @@ def chat(req: ChatRequest):
     else:
         display_response = ai_response
 
-    # Log what the student actually sees
-    log_turn(req.session_code, "assistant_display", display_response, turn_number)
+    # Log what the student sees
+    db.log_turn(req.session_code, "assistant_display", display_response, turn_number)
 
-    # Add raw response to conversation history (AI doesn't see the nudge)
-    session["messages"].append({"role": "assistant", "content": ai_response})
+    # Cache raw response for AI context (model never sees the nudge)
+    conversation.append({"role": "assistant", "content": ai_response})
 
     return ChatResponse(reply=display_response, turn_number=turn_number)
 
 
 @app.get("/api/sessions")
 def list_sessions():
-    """List all sessions (admin endpoint for facilitator)."""
+    rows = db.list_sessions()
     return {
-        code: {
-            "condition": s["condition"],
-            "turn_count": s["turn_count"],
-            "created_at": s["created_at"],
+        r["session_code"]: {
+            "condition": r["condition"],
+            "turn_count": r["turn_count"],
+            "created_at": r["created_at"],
+            "is_test": bool(r["is_test"]),
         }
-        for code, s in sessions.items()
+        for r in rows
     }
 
 
 @app.get("/api/history/{session_code}")
 def get_history(session_code: str):
-    """
-    Return the conversation history for a session (what the student saw).
-    Used by the frontend to restore chat after a page reload.
-    """
-    session = sessions.get(session_code)
+    session = db.get_session(session_code)
     if not session:
         raise HTTPException(404, "Session not found")
-
-    # Rebuild the display history from the log file
-    log_path = DATA_DIR / f"{session_code}.jsonl"
-    messages = []
-    if log_path.exists():
-        for line in log_path.read_text().strip().split("\n"):
-            entry = json.loads(line)
-            if entry["role"] == "user":
-                messages.append({"role": "user", "content": entry["content"]})
-            elif entry["role"] == "assistant_display":
-                messages.append({"role": "assistant", "content": entry["content"]})
-    return {"messages": messages, "turn_count": session["turn_count"]}
+    messages = db.get_display_history(session_code)
+    turn_count = sum(1 for m in messages if m["role"] == "user")
+    return {"messages": messages, "turn_count": turn_count}
 
 
 @app.get("/api/export/{session_code}")
 def export_session(session_code: str):
-    """Export full transcript for a session (admin)."""
-    log_path = DATA_DIR / f"{session_code}.jsonl"
-    if not log_path.exists():
+    transcript = db.get_full_transcript(session_code)
+    if not transcript:
         raise HTTPException(404, "Session log not found")
-    lines = log_path.read_text().strip().split("\n")
-    return [json.loads(line) for line in lines]
+    return transcript
 
-
-@app.post("/api/deidentify")
-def deidentify():
-    """
-    Destroy the linkage table. After this, there is no way to connect
-    session codes back to student numbers.
-
-    In production, this would:
-    1. Export linkage table to a secure location for equity flag matching
-    2. Run the equity flag matching script
-    3. Destroy the linkage table
-    4. Log the destruction with timestamp
-    """
-    global linkage_table
-    count = len(linkage_table)
-    linkage_table = {}
-    timestamp = datetime.utcnow().isoformat()
-
-    # Log the destruction
-    destruction_log = {
-        "event": "linkage_table_destroyed",
-        "records_destroyed": count,
-        "timestamp": timestamp,
-    }
-    log_path = DATA_DIR / "deidentification_log.json"
-    with open(log_path, "w") as f:
-        json.dump(destruction_log, f, indent=2)
-
-    return {"message": f"Linkage table destroyed. {count} records removed.", "timestamp": timestamp}
 
 
 # ---------------------------------------------------------------------------
