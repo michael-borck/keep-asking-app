@@ -13,8 +13,86 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 40px;
-  max-width: 420px;
+  max-width: 520px;
   width: 100%;
+}
+
+.consent-card .study-description {
+  color: var(--text-h);
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.consent-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.consent-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.consent-option:hover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.consent-option.selected {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.consent-option input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--primary);
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.consent-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.consent-label {
+  font-weight: 600;
+  color: var(--text-h);
+  font-size: 15px;
+}
+
+.consent-detail {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.student-id-input {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: var(--mono);
+  letter-spacing: 1px;
+  width: 100%;
+}
+
+.student-id-input:focus {
+  outline: 2px solid var(--primary);
+  border-color: transparent;
 }
 
 .login-card h1 {
@@ -29,21 +107,6 @@
   font-size: 14px;
 }
 
-.login-card input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 16px;
-  margin-bottom: 16px;
-  font-family: var(--mono);
-  letter-spacing: 1px;
-}
-
-.login-card input:focus {
-  outline: 2px solid var(--primary);
-  border-color: transparent;
-}
 
 .login-card button {
   width: 100%;

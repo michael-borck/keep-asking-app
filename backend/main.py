@@ -105,8 +105,9 @@ def startup():
 # ---------------------------------------------------------------------------
 
 class LoginRequest(BaseModel):
-    student_number: str
+    student_number: str = ""
     condition: str | None = None
+    consented: bool = True
 
 class LoginResponse(BaseModel):
     session_code: str
@@ -167,12 +168,15 @@ def _get_conversation(session_code: str) -> list[dict]:
 @app.post("/api/login", response_model=LoginResponse)
 def login(req: LoginRequest):
     student_number = req.student_number.strip()
-    if not student_number:
-        raise HTTPException(400, "Student number is required")
+    consented = req.consented
 
-    is_test = student_number.upper() == TEST_STUDENT
+    # Non-consented sessions are treated like test sessions — no data linked
+    is_test = not consented or student_number.upper() == TEST_STUDENT
 
-    # Check if this student already has a session (skip for test — always new)
+    if consented and not student_number:
+        raise HTTPException(400, "Student number is required when consenting")
+
+    # Check if this student already has a session (skip for test/non-consented)
     if not is_test:
         existing = db.get_session_code_for_student(student_number)
         if existing:
@@ -187,7 +191,12 @@ def login(req: LoginRequest):
     if not is_test:
         db.create_linkage(student_number, session_code)
 
-    label = "TEST session" if is_test else "Session"
+    if not consented:
+        label = "NO-CONSENT session"
+    elif is_test:
+        label = "TEST session"
+    else:
+        label = "Session"
     db.log_turn(session_code, "system", f"{label} started. Condition: {condition}", 0)
 
     return LoginResponse(session_code=session_code, condition=condition)
