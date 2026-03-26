@@ -14,6 +14,7 @@ Run: uvicorn main:app --reload --port 8000
 """
 
 import json
+import logging
 import os
 import random
 import string
@@ -29,6 +30,8 @@ from pydantic import BaseModel
 from anthropic import Anthropic
 
 import db
+
+logger = logging.getLogger("keep-asking")
 
 
 # ---------------------------------------------------------------------------
@@ -49,13 +52,24 @@ TEST_STUDENT = "TEST000"
 NUDGE_CONFIG_FILE = Path(__file__).parent / "nudge_config.json"
 
 
+_NUDGE_FALLBACK = {"active_pool": "default", "count": "1",
+                    "prefix": "\n\n---\n*", "suffix": "*", "separator": "\n\n",
+                    "pools": {"default": ["Take a moment to consider that response."]}}
+
+
 def _load_nudge_config() -> dict:
     if not NUDGE_CONFIG_FILE.exists():
-        return {"active_pool": "default", "count": "1",
-                "prefix": "\n\n---\n*", "suffix": "*", "separator": "\n\n",
-                "pools": {"default": ["Take a moment to consider that response."]}}
-    with open(NUDGE_CONFIG_FILE) as f:
-        return json.load(f)
+        logger.warning("nudge_config.json not found — using built-in defaults")
+        return _NUDGE_FALLBACK
+    try:
+        with open(NUDGE_CONFIG_FILE) as f:
+            cfg = json.load(f)
+        if not isinstance(cfg.get("pools"), dict) or not cfg["pools"]:
+            raise ValueError("'pools' must be a non-empty object")
+        return cfg
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("nudge_config.json is invalid (%s) — using built-in defaults", e)
+        return _NUDGE_FALLBACK
 
 
 NUDGE_CONFIG: dict = _load_nudge_config()
@@ -93,13 +107,24 @@ def get_nudge() -> str:
 PROMPTS_CONFIG_FILE = Path(__file__).parent / "prompts.json"
 
 
+_PROMPTS_FALLBACK = {"active": "default", "prompts": {
+    "default": "You are an AI assistant. Answer the question directly. Do not ask follow-up questions."
+}}
+
+
 def _load_prompts_config() -> dict:
     if not PROMPTS_CONFIG_FILE.exists():
-        return {"active": "default", "prompts": {
-            "default": "You are an AI assistant. Answer the question directly. Do not ask follow-up questions."
-        }}
-    with open(PROMPTS_CONFIG_FILE) as f:
-        return json.load(f)
+        logger.warning("prompts.json not found — using built-in defaults")
+        return _PROMPTS_FALLBACK
+    try:
+        with open(PROMPTS_CONFIG_FILE) as f:
+            cfg = json.load(f)
+        if not isinstance(cfg.get("prompts"), dict) or not cfg["prompts"]:
+            raise ValueError("'prompts' must be a non-empty object")
+        return cfg
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("prompts.json is invalid (%s) — using built-in defaults", e)
+        return _PROMPTS_FALLBACK
 
 
 PROMPTS_CONFIG: dict = _load_prompts_config()
@@ -118,9 +143,21 @@ LAB_SESSIONS_FILE = Path(__file__).parent / "lab_sessions.json"
 
 def _load_lab_sessions() -> list[dict]:
     if not LAB_SESSIONS_FILE.exists():
+        logger.warning("lab_sessions.json not found — no lab sessions configured")
         return []
-    with open(LAB_SESSIONS_FILE) as f:
-        return json.load(f)
+    try:
+        with open(LAB_SESSIONS_FILE) as f:
+            sessions = json.load(f)
+        if not isinstance(sessions, list):
+            raise ValueError("lab_sessions.json must be a JSON array")
+        for s in sessions:
+            for key in ("lab_id", "start_time", "end_time"):
+                if key not in s:
+                    raise ValueError(f"lab session missing required field '{key}'")
+        return sessions
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("lab_sessions.json is invalid (%s) — no lab sessions loaded", e)
+        return []
 
 
 LAB_SESSIONS: list[dict] = _load_lab_sessions()
