@@ -88,17 +88,26 @@ def get_nudge() -> str:
     return separator.join(formatted)
 
 
-SYSTEM_PROMPT = """You are an AI assistant helping a university student complete a structured task.
+# System prompt — loaded from JSON config file.
+# Supports multiple named prompts; set "active" to switch.
+PROMPTS_CONFIG_FILE = Path(__file__).parent / "prompts.json"
 
-IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE STYLE:
-- Answer the student's question directly and completely.
-- Do NOT end your response with follow-up questions.
-- Do NOT offer to elaborate, explain further, or help with anything else.
-- Do NOT append phrases like "Would you like me to...", "Let me know if...", "I can also...", "Feel free to ask...", or similar engagement hooks.
-- Do NOT use bullet points listing "next steps" or "things to consider" unless the student specifically asked for them.
-- Simply answer what was asked, then stop.
 
-Your goal is to be helpful and accurate, but to let the student drive the conversation. If they want more, they will ask."""
+def _load_prompts_config() -> dict:
+    if not PROMPTS_CONFIG_FILE.exists():
+        return {"active": "default", "prompts": {
+            "default": "You are an AI assistant. Answer the question directly. Do not ask follow-up questions."
+        }}
+    with open(PROMPTS_CONFIG_FILE) as f:
+        return json.load(f)
+
+
+PROMPTS_CONFIG: dict = _load_prompts_config()
+
+
+def get_system_prompt() -> str:
+    name = PROMPTS_CONFIG.get("active", "default")
+    return PROMPTS_CONFIG.get("prompts", {}).get(name, "")
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -320,7 +329,7 @@ def chat(req: ChatRequest):
     conversation.append({"role": "user", "content": message})
 
     # Call AI
-    ai_response = call_ai(conversation, SYSTEM_PROMPT)
+    ai_response = call_ai(conversation, get_system_prompt())
 
     # Log raw AI response
     db.log_turn(req.session_code, "assistant_raw", ai_response, turn_number)
