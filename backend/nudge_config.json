@@ -1,0 +1,44 @@
+{
+  "active_pool": "default",
+  "count": "1",
+  "prefix": "\n\n---\n*",
+  "suffix": "*",
+  "separator": "\n\n",
+  "pools": {
+    "default": [
+      "Does that match what you expected? If something seems off, tell me what seems wrong.",
+      "Before you move on - does that actually answer your question, or just part of it?",
+      "Is there anything in that response that doesn't quite fit with what you already know?",
+      "What would you challenge in that answer if you were reviewing someone else's work?",
+      "Does that feel complete, or is there a gap worth pushing on?",
+      "If you had to argue the opposite, what would you say?",
+      "Is that specific enough to be useful, or is it still too general?",
+      "What's the weakest part of that response?",
+      "Does that account for the details in your task, or is it a generic answer?",
+      "Would you trust that answer enough to use it without checking? Why or why not?"
+    ],
+    "push-back": [
+      "What would you challenge in that answer if you were reviewing someone else's work?",
+      "If you had to argue the opposite, what would you say?",
+      "What's the weakest part of that response?",
+      "What assumptions is that answer making that might not hold for your task?",
+      "If a classmate gave you that answer, what would you question first?",
+      "What evidence would you need to see before trusting that response?"
+    ],
+    "brainstorm": [
+      "What other angles could you explore that the AI hasn't mentioned?",
+      "How might someone from a completely different field approach this?",
+      "What if the opposite were true - how would that change your thinking?",
+      "What connections can you see between this and other things you've studied?",
+      "Is there a simpler way to frame this that the AI might have overcomplicated?",
+      "What would you add to this from your own experience or reading?"
+    ],
+    "depth": [
+      "Is that specific enough to be useful, or is it still too general?",
+      "Does that account for the details in your task, or is it a generic answer?",
+      "What details from your task brief are missing from that response?",
+      "Could you use that answer as-is, or does it need more detail to be actionable?",
+      "What would make that answer stronger or more precise?"
+    ]
+  }
+}

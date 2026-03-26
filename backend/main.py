@@ -11,6 +11,7 @@ Handles:
 Run: uvicorn main:app --reload --port 8000
 """
 
+import json
 import os
 import random
 import string
@@ -37,27 +38,51 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 # Test student number - always accepted, flagged as test data
 TEST_STUDENT = "TEST000"
 
-# Nudge variants - randomly selected each turn to reduce habituation.
-NUDGE_VARIANTS = [
-    "Does that match what you expected? If something seems off, tell me what seems wrong.",
-    "Before you move on - does that actually answer your question, or just part of it?",
-    "Is there anything in that response that doesn't quite fit with what you already know?",
-    "What would you challenge in that answer if you were reviewing someone else's work?",
-    "Does that feel complete, or is there a gap worth pushing on?",
-    "If you had to argue the opposite, what would you say?",
-    "Is that specific enough to be useful, or is it still too general?",
-    "What's the weakest part of that response?",
-    "Does that account for the details in your task, or is it a generic answer?",
-    "Would you trust that answer enough to use it without checking? Why or why not?",
-]
+# Nudge configuration — loaded from JSON config file.
+# Supports multiple named pools and configurable count per turn.
+#   count: "1", "2", "3"           → fixed number of nudges
+#          "random"                 → random 1-2 nudges
+#          "random:1-3"            → random in explicit range
+NUDGE_CONFIG_FILE = Path(__file__).parent / "nudge_config.json"
 
-NUDGE_PREFIX = "\n\n---\n*"
-NUDGE_SUFFIX = "*"
+
+def _load_nudge_config() -> dict:
+    if not NUDGE_CONFIG_FILE.exists():
+        return {"active_pool": "default", "count": "1",
+                "prefix": "\n\n---\n*", "suffix": "*", "separator": "\n\n",
+                "pools": {"default": ["Take a moment to consider that response."]}}
+    with open(NUDGE_CONFIG_FILE) as f:
+        return json.load(f)
+
+
+NUDGE_CONFIG: dict = _load_nudge_config()
+
+
+def _resolve_nudge_count(count_spec: str) -> int:
+    """Parse the count config value into an actual number for this turn."""
+    if count_spec.isdigit():
+        return int(count_spec)
+    if count_spec == "random":
+        return random.randint(1, 2)
+    if count_spec.startswith("random:"):
+        lo, hi = count_spec.split(":")[1].split("-")
+        return random.randint(int(lo), int(hi))
+    return 1
 
 
 def get_nudge() -> str:
-    variant = random.choice(NUDGE_VARIANTS)
-    return f"{NUDGE_PREFIX}{variant}{NUDGE_SUFFIX}"
+    pool_name = NUDGE_CONFIG.get("active_pool", "default")
+    pool = NUDGE_CONFIG.get("pools", {}).get(pool_name, [])
+    if not pool:
+        return ""
+    prefix = NUDGE_CONFIG.get("prefix", "\n\n---\n*")
+    suffix = NUDGE_CONFIG.get("suffix", "*")
+    separator = NUDGE_CONFIG.get("separator", "\n\n")
+    count = _resolve_nudge_count(NUDGE_CONFIG.get("count", "1"))
+    count = min(count, len(pool))  # don't exceed pool size
+    selected = random.sample(pool, count)
+    formatted = [f"{prefix}{nudge}{suffix}" for nudge in selected]
+    return separator.join(formatted)
 
 
 SYSTEM_PROMPT = """You are an AI assistant helping a university student complete a structured task.
