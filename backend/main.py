@@ -6,6 +6,7 @@ Handles:
 - Student login (student number -> session code + condition assignment)
 - Chat relay to frontier model (with system prompt suppressing engagement hooks)
 - Nudge append for nudge condition (server-side, invisible to model)
+- Exit survey collection
 - Full transcript logging (SQLite)
 - Session export and de-identification
 
@@ -174,6 +175,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     session_code: str
     condition: str
+    consented: bool
     lab_id: str | None = None
 
 class ChatRequest(BaseModel):
@@ -183,6 +185,13 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     turn_number: int
+
+class FinishRequest(BaseModel):
+    session_code: str
+
+class SurveyRequest(BaseModel):
+    session_code: str
+    responses: dict
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +275,7 @@ def login(req: LoginRequest):
             return LoginResponse(
                 session_code=existing,
                 condition=session["condition"],
+                consented=consented,
                 lab_id=session.get("lab_id"),
             )
 
@@ -285,7 +295,7 @@ def login(req: LoginRequest):
         label = "Session"
     db.log_turn(session_code, "system", f"{label} started. Condition: {condition}", 0)
 
-    return LoginResponse(session_code=session_code, condition=condition, lab_id=lab_id)
+    return LoginResponse(session_code=session_code, condition=condition, consented=consented, lab_id=lab_id)
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -293,6 +303,9 @@ def chat(req: ChatRequest):
     session = db.get_session(req.session_code)
     if not session:
         raise HTTPException(404, "Session not found")
+
+    if session.get("chat_locked"):
+        raise HTTPException(403, "This session has been finished. No further messages accepted.")
 
     message = req.message.strip()
     if not message:
@@ -348,7 +361,12 @@ def get_history(session_code: str):
         raise HTTPException(404, "Session not found")
     messages = db.get_display_history(session_code)
     turn_count = sum(1 for m in messages if m["role"] == "user")
-    return {"messages": messages, "turn_count": turn_count}
+    return {
+        "messages": messages,
+        "turn_count": turn_count,
+        "chat_locked": bool(session.get("chat_locked")),
+        "survey_completed": bool(session.get("survey_completed")),
+    }
 
 
 @app.get("/api/export/{session_code}")
@@ -358,6 +376,45 @@ def export_session(session_code: str):
         raise HTTPException(404, "Session log not found")
     return transcript
 
+
+# ---------------------------------------------------------------------------
+# Finish & Survey
+# ---------------------------------------------------------------------------
+
+@app.post("/api/finish")
+def finish_session(req: FinishRequest):
+    session = db.get_session(req.session_code)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.get("chat_locked"):
+        return {"locked": True}  # idempotent
+    db.lock_chat(req.session_code)
+    db.log_turn(req.session_code, "system", "Student clicked Finish Task", 0)
+    return {"locked": True}
+
+
+REQUIRED_SURVEY_FIELDS = [
+    "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q8a",
+    "q9", "q10", "q11", "q12", "q13",
+]
+
+
+@app.post("/api/survey")
+def submit_survey(req: SurveyRequest):
+    session = db.get_session(req.session_code)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.get("survey_completed"):
+        return {"submitted": True}  # idempotent
+
+    # Validate required fields
+    missing = [f for f in REQUIRED_SURVEY_FIELDS if not req.responses.get(f)]
+    if missing:
+        raise HTTPException(400, f"Missing required fields: {', '.join(missing)}")
+
+    db.save_survey(req.session_code, session.get("lab_id"), req.responses)
+    db.log_turn(req.session_code, "system", "Exit survey submitted", 0)
+    return {"submitted": True}
 
 
 # ---------------------------------------------------------------------------

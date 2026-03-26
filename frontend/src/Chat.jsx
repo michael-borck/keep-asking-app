@@ -3,11 +3,13 @@ import { useState, useRef, useEffect } from "react";
 const API_URL = import.meta.env.VITE_API_URL || "";
 const NUDGE_SEPARATOR = "\n\n---\n";
 
-export default function Chat({ session }) {
+export default function Chat({ session, onFinish, onSessionState }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [turnCount, setTurnCount] = useState(0);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -23,6 +25,13 @@ export default function Chat({ session }) {
           if (data.messages.length > 0) {
             setMessages(data.messages);
             setTurnCount(data.turn_count);
+          }
+          // If session was already locked/completed, redirect
+          if (data.survey_completed || data.chat_locked) {
+            onSessionState({
+              chatLocked: data.chat_locked,
+              surveyCompleted: data.survey_completed,
+            });
           }
         }
       } catch {
@@ -96,13 +105,44 @@ export default function Chat({ session }) {
     }
   }
 
+  async function handleFinishConfirm() {
+    setFinishing(true);
+    try {
+      const res = await fetch(`${API_URL}/api/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_code: session.sessionCode }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to finish session");
+      }
+      onFinish();
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+      setFinishing(false);
+      setShowConfirm(false);
+    }
+  }
+
   return (
     <div className="chat-container">
       <div className="chat-header">
         <h2>AI Lab Session</h2>
-        <span className="session-info">
-          Session: {session.sessionCode}
-        </span>
+        <div className="chat-header-right">
+          {session.consented && (
+            <button
+              className="finish-button"
+              onClick={() => setShowConfirm(true)}
+              disabled={loading}
+            >
+              Finish Task
+            </button>
+          )}
+          <span className="session-info">
+            Session: {session.sessionCode}
+          </span>
+        </div>
       </div>
 
       <div className="chat-messages">
@@ -165,6 +205,33 @@ export default function Chat({ session }) {
           Turn {turnCount} | Session: {session.sessionCode}
         </div>
       </div>
+
+      {showConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Finish Task?</h3>
+            <p>
+              Are you sure? You will not be able to return to the conversation.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="modal-cancel"
+                onClick={() => setShowConfirm(false)}
+                disabled={finishing}
+              >
+                Cancel
+              </button>
+              <button
+                className="modal-confirm"
+                onClick={handleFinishConfirm}
+                disabled={finishing}
+              >
+                {finishing ? "Finishing..." : "Yes, finish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

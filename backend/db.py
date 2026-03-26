@@ -55,13 +55,28 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
         );
 
         CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_code);
+
+        CREATE TABLE IF NOT EXISTS survey_responses (
+            session_code        TEXT PRIMARY KEY REFERENCES sessions(session_code),
+            lab_id              TEXT,
+            timestamp_submitted TEXT NOT NULL,
+            q2  TEXT, q3  TEXT, q4  TEXT, q4a TEXT,
+            q5  TEXT, q6  TEXT, q7  TEXT, q8  TEXT,
+            q8a TEXT, q8b TEXT, q9  TEXT, q10 TEXT,
+            q11 TEXT, q12 TEXT, q13 TEXT, q14 TEXT
+        );
     """)
 
-    # Safe migration — add lab_id column if it doesn't already exist.
-    try:
-        _conn.execute("ALTER TABLE sessions ADD COLUMN lab_id TEXT")
-    except sqlite3.OperationalError:
-        pass  # column already exists
+    # Safe migrations — add columns if they don't already exist.
+    for col, typedef in [
+        ("lab_id", "TEXT"),
+        ("survey_completed", "INTEGER NOT NULL DEFAULT 0"),
+        ("chat_locked", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        try:
+            _conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {typedef}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
     _conn.commit()
     return _conn
@@ -82,7 +97,7 @@ def create_session(session_code: str, condition: str, is_test: bool, lab_id: str
 
 def get_session(session_code: str) -> dict | None:
     row = get_conn().execute(
-        "SELECT session_code, condition, is_test, created_at, lab_id FROM sessions WHERE session_code = ?",
+        "SELECT session_code, condition, is_test, created_at, lab_id, survey_completed, chat_locked FROM sessions WHERE session_code = ?",
         (session_code,),
     ).fetchone()
     if row is None:
@@ -157,3 +172,44 @@ def get_full_transcript(session_code: str) -> list[dict]:
         (session_code,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Chat lock helpers
+# ---------------------------------------------------------------------------
+
+def lock_chat(session_code: str) -> None:
+    conn = get_conn()
+    conn.execute(
+        "UPDATE sessions SET chat_locked = 1 WHERE session_code = ?",
+        (session_code,),
+    )
+    conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Survey helpers
+# ---------------------------------------------------------------------------
+
+SURVEY_COLUMNS = [
+    "q2", "q3", "q4", "q4a",
+    "q5", "q6", "q7", "q8",
+    "q8a", "q8b", "q9", "q10",
+    "q11", "q12", "q13", "q14",
+]
+
+
+def save_survey(session_code: str, lab_id: str | None, answers: dict) -> None:
+    conn = get_conn()
+    values = [answers.get(col) for col in SURVEY_COLUMNS]
+    placeholders = ", ".join(["?"] * len(SURVEY_COLUMNS))
+    col_names = ", ".join(SURVEY_COLUMNS)
+    conn.execute(
+        f"INSERT INTO survey_responses (session_code, lab_id, timestamp_submitted, {col_names}) VALUES (?, ?, ?, {placeholders})",
+        [session_code, lab_id, datetime.utcnow().isoformat()] + values,
+    )
+    conn.execute(
+        "UPDATE sessions SET survey_completed = 1 WHERE session_code = ?",
+        (session_code,),
+    )
+    conn.commit()

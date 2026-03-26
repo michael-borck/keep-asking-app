@@ -36,6 +36,8 @@ export default function Login({ condition, onLogin }) {
       onLogin({
         sessionCode: data.session_code,
         condition: data.condition,
+        consented: data.consented,
+        labId: data.lab_id,
       });
     } catch (err) {
       setError(err.message);
