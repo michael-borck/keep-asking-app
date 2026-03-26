@@ -2,6 +2,7 @@
 keep-asking prototype - FastAPI backend
 
 Handles:
+- Lab session time-gating (backend clock, JSON config)
 - Student login (student number -> session code + condition assignment)
 - Chat relay to frontier model (with system prompt suppressing engagement hooks)
 - Nudge append for nudge condition (server-side, invisible to model)
@@ -15,9 +16,10 @@ import json
 import os
 import random
 import string
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -100,6 +102,41 @@ Your goal is to be helpful and accurate, but to let the student drive the conver
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Lab session schedule — loaded from JSON config file at startup.
+LAB_SESSIONS_FILE = Path(__file__).parent / "lab_sessions.json"
+
+
+def _load_lab_sessions() -> list[dict]:
+    if not LAB_SESSIONS_FILE.exists():
+        return []
+    with open(LAB_SESSIONS_FILE) as f:
+        return json.load(f)
+
+
+LAB_SESSIONS: list[dict] = _load_lab_sessions()
+
+
+def get_active_lab_session(lab_id: str | None = None) -> dict | None:
+    """Return a lab session whose time window contains UTC now, or None."""
+    now = datetime.now(timezone.utc)
+    for lab in LAB_SESSIONS:
+        if lab_id and lab["lab_id"] != lab_id:
+            continue
+        start = datetime.fromisoformat(lab["start_time"])
+        end = datetime.fromisoformat(lab["end_time"])
+        if start <= now <= end:
+            return lab
+    return None
+
+
+def is_lab_accepting_logins(lab_id: str | None = None) -> tuple[bool, dict | None, str]:
+    """Check if there is an active lab session accepting new logins.
+    Returns (active, lab_dict_or_none, message)."""
+    lab = get_active_lab_session(lab_id)
+    if lab:
+        return True, lab, "Session active"
+    return False, None, "No active session. Please wait for your facilitator."
+
 
 # ---------------------------------------------------------------------------
 # App
@@ -137,6 +174,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     session_code: str
     condition: str
+    lab_id: str | None = None
 
 class ChatRequest(BaseModel):
     session_code: str
@@ -190,6 +228,17 @@ def _get_conversation(session_code: str) -> list[dict]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/api/session-status")
+def session_status(lab: str | None = Query(None)):
+    """Check whether a lab session is currently active (server clock)."""
+    active, lab_data, message = is_lab_accepting_logins(lab)
+    return {
+        "active": active,
+        "lab_id": lab_data["lab_id"] if lab_data else None,
+        "message": message,
+    }
+
+
 @app.post("/api/login", response_model=LoginResponse)
 def login(req: LoginRequest):
     student_number = req.student_number.strip()
@@ -201,17 +250,29 @@ def login(req: LoginRequest):
     if consented and not student_number:
         raise HTTPException(400, "Student number is required when consenting")
 
+    # Lab session gate — TEST000 bypasses
+    lab_id = None
+    if not (student_number.upper() == TEST_STUDENT):
+        active, lab_data, msg = is_lab_accepting_logins()
+        if not active:
+            raise HTTPException(403, msg)
+        lab_id = lab_data["lab_id"]
+
     # Check if this student already has a session (skip for test/non-consented)
     if not is_test:
         existing = db.get_session_code_for_student(student_number)
         if existing:
             session = db.get_session(existing)
-            return LoginResponse(session_code=existing, condition=session["condition"])
+            return LoginResponse(
+                session_code=existing,
+                condition=session["condition"],
+                lab_id=session.get("lab_id"),
+            )
 
     session_code = generate_session_code()
     condition = req.condition if req.condition in ("nudge", "control") else assign_condition()
 
-    db.create_session(session_code, condition, is_test)
+    db.create_session(session_code, condition, is_test, lab_id=lab_id)
 
     if not is_test:
         db.create_linkage(student_number, session_code)
@@ -224,7 +285,7 @@ def login(req: LoginRequest):
         label = "Session"
     db.log_turn(session_code, "system", f"{label} started. Condition: {condition}", 0)
 
-    return LoginResponse(session_code=session_code, condition=condition)
+    return LoginResponse(session_code=session_code, condition=condition, lab_id=lab_id)
 
 
 @app.post("/api/chat", response_model=ChatResponse)

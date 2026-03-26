@@ -56,6 +56,13 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
 
         CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_code);
     """)
+
+    # Safe migration — add lab_id column if it doesn't already exist.
+    try:
+        _conn.execute("ALTER TABLE sessions ADD COLUMN lab_id TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     _conn.commit()
     return _conn
 
@@ -64,18 +71,18 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
 # Session helpers
 # ---------------------------------------------------------------------------
 
-def create_session(session_code: str, condition: str, is_test: bool) -> None:
+def create_session(session_code: str, condition: str, is_test: bool, lab_id: str | None = None) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO sessions (session_code, condition, is_test, created_at) VALUES (?, ?, ?, ?)",
-        (session_code, condition, int(is_test), datetime.utcnow().isoformat()),
+        "INSERT INTO sessions (session_code, condition, is_test, created_at, lab_id) VALUES (?, ?, ?, ?, ?)",
+        (session_code, condition, int(is_test), datetime.utcnow().isoformat(), lab_id),
     )
     conn.commit()
 
 
 def get_session(session_code: str) -> dict | None:
     row = get_conn().execute(
-        "SELECT session_code, condition, is_test, created_at FROM sessions WHERE session_code = ?",
+        "SELECT session_code, condition, is_test, created_at, lab_id FROM sessions WHERE session_code = ?",
         (session_code,),
     ).fetchone()
     if row is None:
