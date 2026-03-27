@@ -44,6 +44,9 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 # Test student number - always accepted, flagged as test data
 TEST_STUDENT = "TEST000"
 
+# Secret token for bypassing session check (set in .env, use as ?token=<value>)
+TEST_TOKEN = os.getenv("TEST_TOKEN", "")
+
 # Config file resolution: check CONFIG_DIR (Docker volume mount) first,
 # then fall back to the backend directory (local dev).
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/app/config"))
@@ -298,8 +301,12 @@ def _get_conversation(session_code: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 @app.get("/api/session-status")
-def session_status(lab: str | None = Query(None)):
+def session_status(lab: str | None = Query(None), token: str | None = Query(None)):
     """Check whether a lab session is currently active (server clock)."""
+    # Valid test token bypasses the time check
+    if token and TEST_TOKEN and token == TEST_TOKEN:
+        return {"active": True, "lab_id": None, "message": "Test mode"}
+
     active, lab_data, message = is_lab_accepting_logins(lab)
     return {
         "active": active,

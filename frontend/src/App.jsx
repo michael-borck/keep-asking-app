@@ -40,19 +40,13 @@ export default function App({ condition }) {
   }, []);
 
   async function checkLabSession() {
-    const params = new URLSearchParams(window.location.search);
-
-    // ?test bypasses session check (matches TEST000 backend bypass)
-    if (params.has("test")) {
-      setAppState("login");
-      return;
-    }
-
     try {
-      const labParam = params.get("lab");
-      const url = labParam
-        ? `${API_URL}/api/session-status?lab=${encodeURIComponent(labParam)}`
-        : `${API_URL}/api/session-status`;
+      const params = new URLSearchParams(window.location.search);
+      const query = new URLSearchParams();
+      if (params.get("lab")) query.set("lab", params.get("lab"));
+      if (params.get("token")) query.set("token", params.get("token"));
+      const qs = query.toString();
+      const url = `${API_URL}/api/session-status${qs ? `?${qs}` : ""}`;
       const res = await fetch(url);
       const data = await res.json();
       setAppState(data.active ? "login" : "no-session");
