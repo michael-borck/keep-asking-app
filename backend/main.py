@@ -44,12 +44,26 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 # Test student number - always accepted, flagged as test data
 TEST_STUDENT = "TEST000"
 
+# Config file resolution: check CONFIG_DIR (Docker volume mount) first,
+# then fall back to the backend directory (local dev).
+CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/app/config"))
+_BACKEND_DIR = Path(__file__).parent
+
+
+def _config_path(filename: str) -> Path:
+    """Return the path to a config file, preferring CONFIG_DIR over backend dir."""
+    external = CONFIG_DIR / filename
+    if external.exists():
+        return external
+    return _BACKEND_DIR / filename
+
+
 # Nudge configuration — loaded from JSON config file.
 # Supports multiple named pools and configurable count per turn.
 #   count: "1", "2", "3"           → fixed number of nudges
 #          "random"                 → random 1-2 nudges
 #          "random:1-3"            → random in explicit range
-NUDGE_CONFIG_FILE = Path(__file__).parent / "nudge_config.json"
+NUDGE_CONFIG_FILE = _config_path("nudge_config.json")
 
 
 _NUDGE_FALLBACK = {"active_pool": "default", "count": "1",
@@ -104,7 +118,7 @@ def get_nudge() -> str:
 
 # System prompt — loaded from JSON config file.
 # Supports multiple named prompts; set "active" to switch.
-PROMPTS_CONFIG_FILE = Path(__file__).parent / "prompts.json"
+PROMPTS_CONFIG_FILE = _config_path("prompts.json")
 
 
 _PROMPTS_FALLBACK = {"active": "default", "prompts": {
@@ -138,7 +152,7 @@ DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Lab session schedule — loaded from JSON config file at startup.
-LAB_SESSIONS_FILE = Path(__file__).parent / "lab_sessions.json"
+LAB_SESSIONS_FILE = _config_path("lab_sessions.json")
 
 
 def _load_lab_sessions() -> list[dict]:
