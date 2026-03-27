@@ -40,8 +40,15 @@ export default function App({ condition }) {
   }, []);
 
   async function checkLabSession() {
+    const params = new URLSearchParams(window.location.search);
+
+    // ?test bypasses session check (matches TEST000 backend bypass)
+    if (params.has("test")) {
+      setAppState("login");
+      return;
+    }
+
     try {
-      const params = new URLSearchParams(window.location.search);
       const labParam = params.get("lab");
       const url = labParam
         ? `${API_URL}/api/session-status?lab=${encodeURIComponent(labParam)}`
