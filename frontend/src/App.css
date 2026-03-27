@@ -13,7 +13,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 40px;
-  max-width: 520px;
+  max-width: 600px;
   width: 100%;
 }
 
@@ -126,6 +126,94 @@
 .login-card button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* PIS expandable section */
+.pis-details {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pis-details summary {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.pis-details summary:hover {
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.pis-details[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.pis-content {
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.pis-content h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.pis-content p {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.pis-content ul {
+  margin: 4px 0 8px 20px;
+  padding: 0;
+}
+
+.pis-content li {
+  margin-bottom: 4px;
+}
+
+.pis-contact {
+  font-size: 12px;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 12px;
+}
+
+/* Consent items list */
+.consent-items {
+  margin-bottom: 24px;
+}
+
+.consent-items-heading {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+  margin-bottom: 8px;
+}
+
+.consent-items ul {
+  margin: 0 0 0 20px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.consent-items li {
+  margin-bottom: 6px;
 }
 
 .login-error {
