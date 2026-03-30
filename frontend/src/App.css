@@ -216,6 +216,74 @@
   margin-bottom: 6px;
 }
 
+/* Equity indicators section */
+.equity-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.equity-intro {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.equity-question {
+  margin-bottom: 16px;
+}
+
+.equity-question:last-child {
+  margin-bottom: 0;
+}
+
+.equity-question > label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.equity-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.equity-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.equity-option:hover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.equity-option.selected {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.equity-option input[type="radio"] {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+}
+
 .login-error {
   color: #dc2626;
   font-size: 14px;

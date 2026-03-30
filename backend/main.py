@@ -231,9 +231,10 @@ def startup():
 # ---------------------------------------------------------------------------
 
 class LoginRequest(BaseModel):
-    student_number: str = ""
     condition: str | None = None
     consented: bool = True
+    first_in_family: str | None = None
+    low_ses: str | None = None
 
 class LoginResponse(BaseModel):
     session_code: str
@@ -317,47 +318,29 @@ def session_status(lab: str | None = Query(None), token: str | None = Query(None
 
 @app.post("/api/login", response_model=LoginResponse)
 def login(req: LoginRequest):
-    student_number = req.student_number.strip()
     consented = req.consented
+    is_test = not consented
 
-    # Non-consented sessions are treated like test sessions — no data linked
-    is_test = not consented or student_number.upper() == TEST_STUDENT
-
-    if consented and not student_number:
-        raise HTTPException(400, "Student number is required when consenting")
-
-    # Lab session gate — TEST000 bypasses
+    # Lab session gate (token-based test access bypasses this at /api/session-status)
     lab_id = None
-    if not (student_number.upper() == TEST_STUDENT):
-        active, lab_data, msg = is_lab_accepting_logins()
-        if not active:
-            raise HTTPException(403, msg)
+    active, lab_data, msg = is_lab_accepting_logins()
+    if active:
         lab_id = lab_data["lab_id"]
-
-    # Check if this student already has a session (skip for test/non-consented)
-    if not is_test:
-        existing = db.get_session_code_for_student(student_number)
-        if existing:
-            session = db.get_session(existing)
-            return LoginResponse(
-                session_code=existing,
-                condition=session["condition"],
-                consented=consented,
-                lab_id=session.get("lab_id"),
-            )
+    elif not is_test:
+        # Non-test sessions require an active lab session
+        raise HTTPException(403, msg)
 
     session_code = generate_session_code()
     condition = req.condition if req.condition in ("nudge", "control") else assign_condition()
 
-    db.create_session(session_code, condition, is_test, lab_id=lab_id)
-
-    if not is_test:
-        db.create_linkage(student_number, session_code)
+    db.create_session(
+        session_code, condition, is_test, lab_id=lab_id,
+        first_in_family=req.first_in_family if consented else None,
+        low_ses=req.low_ses if consented else None,
+    )
 
     if not consented:
         label = "NO-CONSENT session"
-    elif is_test:
-        label = "TEST session"
     else:
         label = "Session"
     db.log_turn(session_code, "system", f"{label} started. Condition: {condition}", 0)
@@ -461,8 +444,8 @@ def finish_session(req: FinishRequest):
 
 
 REQUIRED_SURVEY_FIELDS = [
-    "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q8a",
-    "q9", "q10", "q11", "q12", "q13",
+    "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q7a",
+    "q8", "q9", "q10", "q11", "q12",
 ]
 
 

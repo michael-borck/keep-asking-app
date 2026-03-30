@@ -60,10 +60,10 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
             session_code        TEXT PRIMARY KEY REFERENCES sessions(session_code),
             lab_id              TEXT,
             timestamp_submitted TEXT NOT NULL,
-            q2  TEXT, q3  TEXT, q4  TEXT, q4a TEXT,
-            q5  TEXT, q6  TEXT, q7  TEXT, q8  TEXT,
-            q8a TEXT, q8b TEXT, q9  TEXT, q10 TEXT,
-            q11 TEXT, q12 TEXT, q13 TEXT, q14 TEXT
+            q1  TEXT, q2  TEXT, q3  TEXT, q3a TEXT,
+            q4  TEXT, q5  TEXT, q6  TEXT, q7  TEXT,
+            q7a TEXT, q7b TEXT, q8  TEXT, q9  TEXT,
+            q10 TEXT, q11 TEXT, q12 TEXT, q13 TEXT
         );
     """)
 
@@ -72,6 +72,8 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
         ("lab_id", "TEXT"),
         ("survey_completed", "INTEGER NOT NULL DEFAULT 0"),
         ("chat_locked", "INTEGER NOT NULL DEFAULT 0"),
+        ("first_in_family", "TEXT"),
+        ("low_ses", "TEXT"),
     ]:
         try:
             _conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {typedef}")
@@ -86,18 +88,23 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
 # Session helpers
 # ---------------------------------------------------------------------------
 
-def create_session(session_code: str, condition: str, is_test: bool, lab_id: str | None = None) -> None:
+def create_session(
+    session_code: str, condition: str, is_test: bool,
+    lab_id: str | None = None,
+    first_in_family: str | None = None,
+    low_ses: str | None = None,
+) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO sessions (session_code, condition, is_test, created_at, lab_id) VALUES (?, ?, ?, ?, ?)",
-        (session_code, condition, int(is_test), datetime.utcnow().isoformat(), lab_id),
+        "INSERT INTO sessions (session_code, condition, is_test, created_at, lab_id, first_in_family, low_ses) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (session_code, condition, int(is_test), datetime.utcnow().isoformat(), lab_id, first_in_family, low_ses),
     )
     conn.commit()
 
 
 def get_session(session_code: str) -> dict | None:
     row = get_conn().execute(
-        "SELECT session_code, condition, is_test, created_at, lab_id, survey_completed, chat_locked FROM sessions WHERE session_code = ?",
+        "SELECT session_code, condition, is_test, created_at, lab_id, survey_completed, chat_locked, first_in_family, low_ses FROM sessions WHERE session_code = ?",
         (session_code,),
     ).fetchone()
     if row is None:
@@ -192,10 +199,10 @@ def lock_chat(session_code: str) -> None:
 # ---------------------------------------------------------------------------
 
 SURVEY_COLUMNS = [
-    "q2", "q3", "q4", "q4a",
-    "q5", "q6", "q7", "q8",
-    "q8a", "q8b", "q9", "q10",
-    "q11", "q12", "q13", "q14",
+    "q1", "q2", "q3", "q3a",
+    "q4", "q5", "q6", "q7",
+    "q7a", "q7b", "q8", "q9",
+    "q10", "q11", "q12", "q13",
 ]
 
 

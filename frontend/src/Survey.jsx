@@ -69,13 +69,12 @@ export default function Survey({ session, onComplete }) {
 
     // Validate required fields
     const required = [
-      "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q8a",
-      "q9", "q10", "q11", "q12", "q13",
+      "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q7a",
+      "q8", "q9", "q10", "q11", "q12",
     ];
     const missing = required.filter((f) => !answers[f]);
     if (missing.length > 0) {
       setErrors(missing);
-      // Scroll to first error
       const firstError = document.querySelector(".survey-error");
       if (firstError) firstError.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -119,27 +118,19 @@ export default function Survey({ session, onComplete }) {
         </p>
 
         <form onSubmit={handleSubmit}>
-          {/* Section 1: Session Code */}
-          <div className="survey-section">
-            <h2>Your Session Code</h2>
-            <div className="session-code-display">
-              Your session code is: <strong>{session.sessionCode}</strong>
-            </div>
-          </div>
-
-          {/* Section 2: Your Task */}
+          {/* Section 1: Your Task */}
           <div className="survey-section">
             <h2>Your Task</h2>
 
-            <div className={`survey-question ${hasError("q2") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q1") ? "survey-error" : ""}`}>
               <label>
                 How confident are you that your final task output today was
                 accurate and well-reasoned?
               </label>
               <LikertGroup
-                name="q2"
-                value={answers.q2}
-                onChange={(v) => set("q2", v)}
+                name="q1"
+                value={answers.q1}
+                onChange={(v) => set("q1", v)}
                 labels={[
                   "Not confident at all",
                   "Slightly confident",
@@ -150,14 +141,14 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q3") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q2") ? "survey-error" : ""}`}>
               <label>
                 How satisfied are you with the quality of your final task output?
               </label>
               <LikertGroup
-                name="q3"
-                value={answers.q3}
-                onChange={(v) => set("q3", v)}
+                name="q2"
+                value={answers.q2}
+                onChange={(v) => set("q2", v)}
                 labels={[
                   "Very unsatisfied",
                   "Unsatisfied",
@@ -168,27 +159,27 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q4") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q3") ? "survey-error" : ""}`}>
               <label>
                 At any point during the session, did something the AI said seem
                 wrong, incomplete, or surprising to you?
               </label>
               <RadioGroup
-                name="q4"
-                value={answers.q4}
-                onChange={(v) => set("q4", v)}
+                name="q3"
+                value={answers.q3}
+                onChange={(v) => set("q3", v)}
                 options={["Yes", "No", "Not sure"]}
               />
             </div>
 
-            {answers.q4 === "Yes" && (
+            {answers.q3 === "Yes" && (
               <div className="survey-question conditional">
                 <label>
                   Briefly describe what seemed wrong or surprising.
                 </label>
                 <textarea
-                  value={answers.q4a || ""}
-                  onChange={(e) => set("q4a", e.target.value)}
+                  value={answers.q3a || ""}
+                  onChange={(e) => set("q3a", e.target.value)}
                   rows={3}
                   placeholder="Optional"
                 />
@@ -196,19 +187,19 @@ export default function Survey({ session, onComplete }) {
             )}
           </div>
 
-          {/* Section 3: How You Worked with the AI */}
+          {/* Section 2: How You Worked with the AI */}
           <div className="survey-section">
             <h2>How You Worked with the AI</h2>
 
-            <div className={`survey-question ${hasError("q5") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q4") ? "survey-error" : ""}`}>
               <label>
                 Which of the following best describes how you worked with the AI
                 tool today?
               </label>
               <RadioGroup
-                name="q5"
-                value={answers.q5}
-                onChange={(v) => set("q5", v)}
+                name="q4"
+                value={answers.q4}
+                onChange={(v) => set("q4", v)}
                 options={[
                   "I mostly accepted what the AI said and used it to build my response",
                   "I sometimes pushed back or asked follow-up questions, but mostly accepted the responses",
@@ -218,15 +209,15 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q6") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q5") ? "survey-error" : ""}`}>
               <label>
                 How much did you feel like you were directing the conversation
                 with the AI, versus following where it led?
               </label>
               <LikertGroup
-                name="q6"
-                value={answers.q6}
-                onChange={(v) => set("q6", v)}
+                name="q5"
+                value={answers.q5}
+                onChange={(v) => set("q5", v)}
                 labels={[
                   "The AI mostly led, I followed",
                   "The AI led more than I did",
@@ -237,15 +228,15 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q7") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q6") ? "survey-error" : ""}`}>
               <label>
                 Did you feel the AI tool was helpful for completing the task
                 today?
               </label>
               <LikertGroup
-                name="q7"
-                value={answers.q7}
-                onChange={(v) => set("q7", v)}
+                name="q6"
+                value={answers.q6}
+                onChange={(v) => set("q6", v)}
                 labels={[
                   "Not helpful at all",
                   "Slightly helpful",
@@ -256,15 +247,15 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q8") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q7") ? "survey-error" : ""}`}>
               <label>
                 Did anything about the AI tool's responses make you want to ask a
                 follow-up question or push back?
               </label>
               <RadioGroup
-                name="q8"
-                value={answers.q8}
-                onChange={(v) => set("q8", v)}
+                name="q7"
+                value={answers.q7}
+                onChange={(v) => set("q7", v)}
                 options={[
                   "Yes, frequently",
                   "Yes, occasionally",
@@ -274,26 +265,26 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q8a") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q7a") ? "survey-error" : ""}`}>
               <label>
                 Did you notice anything unusual or different about the way the AI
                 responded today (for example, any extra text or prompts in the
                 responses)?
               </label>
               <RadioGroup
-                name="q8a"
-                value={answers.q8a}
-                onChange={(v) => set("q8a", v)}
+                name="q7a"
+                value={answers.q7a}
+                onChange={(v) => set("q7a", v)}
                 options={["Yes", "No", "Not sure"]}
               />
             </div>
 
-            {answers.q8a === "Yes" && (
+            {answers.q7a === "Yes" && (
               <div className="survey-question conditional">
                 <label>Briefly describe what you noticed.</label>
                 <textarea
-                  value={answers.q8b || ""}
-                  onChange={(e) => set("q8b", e.target.value)}
+                  value={answers.q7b || ""}
+                  onChange={(e) => set("q7b", e.target.value)}
                   rows={3}
                   placeholder="Optional"
                 />
@@ -301,7 +292,7 @@ export default function Survey({ session, onComplete }) {
             )}
           </div>
 
-          {/* Section 4: Your Prior AI Experience */}
+          {/* Section 3: Your Prior AI Experience */}
           <div className="survey-section">
             <h2>Your Prior AI Experience</h2>
             <p className="section-note">
@@ -309,15 +300,15 @@ export default function Survey({ session, onComplete }) {
               the study. There are no right or wrong answers.
             </p>
 
-            <div className={`survey-question ${hasError("q9") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q8") ? "survey-error" : ""}`}>
               <label>
                 How often do you use AI tools (such as ChatGPT, Claude, Gemini,
                 or similar) for study or work?
               </label>
               <RadioGroup
-                name="q9"
-                value={answers.q9}
-                onChange={(v) => set("q9", v)}
+                name="q8"
+                value={answers.q8}
+                onChange={(v) => set("q8", v)}
                 options={[
                   "Never",
                   "Occasionally (a few times a month)",
@@ -327,15 +318,15 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q10") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q9") ? "survey-error" : ""}`}>
               <label>
                 Before today, how would you describe your typical approach when
                 using an AI tool for a task?
               </label>
               <RadioGroup
-                name="q10"
-                value={answers.q10}
-                onChange={(v) => set("q10", v)}
+                name="q9"
+                value={answers.q9}
+                onChange={(v) => set("q9", v)}
                 options={[
                   "I usually accept the first response and use it directly",
                   "I sometimes ask follow-up questions but mostly accept responses",
@@ -345,22 +336,22 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q11") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q10") ? "survey-error" : ""}`}>
               <label>
                 Have you received any formal instruction on how to use AI tools
                 effectively (for example, in a class, workshop, or training
                 session)?
               </label>
               <RadioGroup
-                name="q11"
-                value={answers.q11}
-                onChange={(v) => set("q11", v)}
+                name="q10"
+                value={answers.q10}
+                onChange={(v) => set("q10", v)}
                 options={["Yes", "No", "Not sure"]}
               />
             </div>
           </div>
 
-          {/* Section 5: About You */}
+          {/* Section 4: About You */}
           <div className="survey-section">
             <h2>About You</h2>
             <p className="section-note">
@@ -368,12 +359,12 @@ export default function Survey({ session, onComplete }) {
               the study sample. Responses cannot be linked to your identity.
             </p>
 
-            <div className={`survey-question ${hasError("q12") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q11") ? "survey-error" : ""}`}>
               <label>What is your current year of study?</label>
               <RadioGroup
-                name="q12"
-                value={answers.q12}
-                onChange={(v) => set("q12", v)}
+                name="q11"
+                value={answers.q11}
+                onChange={(v) => set("q11", v)}
                 options={[
                   "First year",
                   "Second year",
@@ -385,13 +376,13 @@ export default function Survey({ session, onComplete }) {
               />
             </div>
 
-            <div className={`survey-question ${hasError("q13") ? "survey-error" : ""}`}>
+            <div className={`survey-question ${hasError("q12") ? "survey-error" : ""}`}>
               <label>
                 What is your primary discipline or field of study?
               </label>
               <select
-                value={answers.q13 || ""}
-                onChange={(e) => set("q13", e.target.value)}
+                value={answers.q12 || ""}
+                onChange={(e) => set("q12", e.target.value)}
                 className="survey-select"
               >
                 <option value="">Select your discipline...</option>
@@ -409,8 +400,8 @@ export default function Survey({ session, onComplete }) {
                 experience today?
               </label>
               <textarea
-                value={answers.q14 || ""}
-                onChange={(e) => set("q14", e.target.value)}
+                value={answers.q13 || ""}
+                onChange={(e) => set("q13", e.target.value)}
                 rows={4}
                 placeholder="Optional"
               />

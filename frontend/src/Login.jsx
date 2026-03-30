@@ -2,9 +2,30 @@ import { useState } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+// Radio group helper for equity questions
+function EquityRadio({ name, value, onChange, options }) {
+  return (
+    <div className="equity-options">
+      {options.map((opt) => (
+        <label key={opt} className={`equity-option ${value === opt ? "selected" : ""}`}>
+          <input
+            type="radio"
+            name={name}
+            value={opt}
+            checked={value === opt}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 export default function Login({ condition, onLogin }) {
   const [consented, setConsented] = useState(null); // null = not chosen, true/false
-  const [studentNumber, setStudentNumber] = useState("");
+  const [firstInFamily, setFirstInFamily] = useState("");
+  const [lowSes, setLowSes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pisOpen, setPisOpen] = useState(false);
@@ -12,7 +33,6 @@ export default function Login({ condition, onLogin }) {
   async function handleProceed(e) {
     e.preventDefault();
     if (consented === null) return;
-    if (consented && !studentNumber.trim()) return;
 
     setLoading(true);
     setError("");
@@ -22,9 +42,10 @@ export default function Login({ condition, onLogin }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          student_number: consented ? studentNumber.trim() : "",
           condition: condition,
           consented: consented,
+          first_in_family: consented ? (firstInFamily || "Prefer not to say") : null,
+          low_ses: consented ? (lowSes || "Prefer not to say") : null,
         }),
       });
 
@@ -46,9 +67,6 @@ export default function Login({ condition, onLogin }) {
       setLoading(false);
     }
   }
-
-  const canProceed =
-    consented === false || (consented === true && studentNumber.trim());
 
   return (
     <div className="login-container">
@@ -104,18 +122,16 @@ export default function Login({ condition, onLogin }) {
 
             <h4>Privacy and confidentiality</h4>
             <p>
-              Your student number is used only to link equity indicators to your
-              session data and is then permanently deleted. Your conversation and
-              survey responses are tagged with a random session code only — your
-              name and student number do not appear in the research data.
+              No personal identifying information (such as your name or student
+              number) is collected. All data is tagged with a random session code
+              only. The research team analyses only anonymous data.
             </p>
 
             <h4>Withdrawal</h4>
             <p>
-              You may withdraw at any time before data de-identification by
-              contacting the research team and quoting your session code. Once
-              de-identification is complete, withdrawal is no longer possible as
-              individual records cannot be identified.
+              You may stop participating at any time during the session. Because
+              no identifying information is collected, withdrawal after the
+              session is not possible as individual records cannot be identified.
             </p>
 
             <p className="pis-contact">
@@ -136,20 +152,23 @@ export default function Login({ condition, onLogin }) {
               grades.
             </li>
             <li>
-              You understand your student number is collected to link equity
-              indicators and will be permanently deleted after linkage.
+              You understand that no personal identifying information (such as
+              your name or student number) is collected. All data is tagged with
+              a random session code only.
             </li>
             <li>
-              You consent to logging of your AI conversation and completing the
-              exit survey.
+              You consent to logging of your AI conversation and to completing a
+              brief exit survey within the app.
             </li>
             <li>
-              You consent to the use of de-identified data in publications and
+              You consent to the use of anonymous data in publications and
               teaching resources.
             </li>
             <li>
-              You understand you may withdraw before de-identification by quoting
-              your session code.
+              You understand you may stop participating at any time during the
+              session. Because no identifying information is collected, withdrawal
+              after the session is not possible as individual records cannot be
+              identified.
             </li>
           </ul>
         </div>
@@ -168,17 +187,6 @@ export default function Login({ condition, onLogin }) {
               <span className="consent-label">
                 I have read the information above and consent to participate
               </span>
-              {consented === true && (
-                <input
-                  type="text"
-                  className="student-id-input"
-                  placeholder="Enter your student ID"
-                  value={studentNumber}
-                  onChange={(e) => setStudentNumber(e.target.value)}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                />
-              )}
             </div>
           </label>
 
@@ -201,9 +209,45 @@ export default function Login({ condition, onLogin }) {
           </label>
         </div>
 
+        {consented === true && (
+          <div className="equity-section">
+            <p className="equity-intro">
+              The following questions help us understand whether this
+              intervention benefits all students equally. Your answers are stored
+              with your anonymous session code only and cannot be linked to your
+              identity. You may select "Prefer not to say" for either question.
+            </p>
+
+            <div className="equity-question">
+              <label>
+                Are you the first person in your immediate family to attend
+                university?
+              </label>
+              <EquityRadio
+                name="first_in_family"
+                value={firstInFamily}
+                onChange={setFirstInFamily}
+                options={["Yes", "No", "Prefer not to say"]}
+              />
+            </div>
+
+            <div className="equity-question">
+              <label>
+                Do you identify as being from a low socioeconomic background?
+              </label>
+              <EquityRadio
+                name="low_ses"
+                value={lowSes}
+                onChange={setLowSes}
+                options={["Yes", "No", "Prefer not to say"]}
+              />
+            </div>
+          </div>
+        )}
+
         {error && <div className="login-error">{error}</div>}
 
-        <button type="submit" disabled={loading || !canProceed}>
+        <button type="submit" disabled={loading || consented === null}>
           {loading ? "Starting session..." : "Proceed"}
         </button>
       </form>
