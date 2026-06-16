@@ -3,7 +3,7 @@ keep-asking prototype - FastAPI backend
 
 Handles:
 - Lab session time-gating (backend clock, JSON config)
-- Student login (student number -> session code + condition assignment)
+- Anonymous start: consent screen -> random session code + server-assigned condition
 - Chat relay to frontier model (with system prompt suppressing engagement hooks)
 - Nudge append for nudge condition (server-side, invisible to model)
 - Exit survey collection
@@ -40,9 +40,6 @@ logger = logging.getLogger("keep-asking")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
-
-# Test student number - always accepted, flagged as test data
-TEST_STUDENT = "TEST000"
 
 # Secret token for bypassing session check (set in .env, use as ?token=<value>)
 TEST_TOKEN = os.getenv("TEST_TOKEN", "")

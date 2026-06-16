@@ -71,6 +71,7 @@ export default function Login({ condition, onLogin }) {
   return (
     <div className="login-container">
       <form className="login-card consent-card" onSubmit={handleProceed}>
+        <img src="/logo-curtin.png" alt="Curtin University" className="curtin-logo" />
         <h1>AI Lab Session</h1>
 
         <p className="study-description">
@@ -91,8 +92,12 @@ export default function Login({ condition, onLogin }) {
               Intervention for Equitable Student Engagement
             </p>
             <p>
-              <strong>Investigators:</strong> Michael Borck (PI); Marcela Moraes;
-              Torsten Reiners; Renee Ralph
+              <strong>HREC approval number:</strong> 83897
+            </p>
+            <p>
+              <strong>Investigators:</strong> Michael Borck (Principal Investigator);
+              Marcela Moraes (Co-Investigator); Torsten Reiners (Co-Investigator);
+              Renee Ralph (Co-Investigator)
             </p>
 
             <h4>What is this study about?</h4>
@@ -123,20 +128,45 @@ export default function Login({ condition, onLogin }) {
             <h4>Privacy and confidentiality</h4>
             <p>
               No personal identifying information (such as your name or student
-              number) is collected. All data is tagged with a random session code
-              only. The research team analyses only anonymous data.
+              number) is collected at any stage. All data is tagged with a random
+              session code only. The research team analyses only anonymous data.
+              The following people will have access to the data: the research team
+              and, in the event of an audit or investigation, staff from the
+              Research Office at Curtin. Data will be stored securely on Curtin
+              University systems for 7 years after the research is published or
+              completed, and then destroyed.
             </p>
 
-            <h4>Withdrawal</h4>
+            <h4>Data sharing</h4>
             <p>
-              You may stop participating at any time during the session. Because
-              no identifying information is collected, withdrawal after the
-              session is not possible as individual records cannot be identified.
+              Aggregate findings and anonymous excerpts from this study may be
+              shared with other researchers and published in peer-reviewed outlets
+              and open-access resources. No individual-level data or raw
+              transcripts will be shared. Results will be published in a
+              peer-reviewed journal and shared as an open-access resource pack
+              available to any teaching team.
             </p>
 
-            <p className="pis-contact">
-              Questions: michael.borck@curtin.edu.au | Ethics concerns:
-              hrec@curtin.edu.au
+            <h4>Voluntary participation and withdrawal</h4>
+            <p>
+              Participation is voluntary and will not affect your studies or your
+              relationship with the University, staff, or colleagues. You may stop
+              participating at any time during the session. Because no identifying
+              information is collected, withdrawal after the session is not
+              possible as individual records cannot be identified.
+            </p>
+
+            <h4>Contact and complaints</h4>
+            <p>
+              For questions about the study: michael.borck@curtin.edu.au
+            </p>
+            <p>
+              Curtin University Human Research Ethics Committee (HREC) has
+              approved this study (HREC number 83897). Should you wish
+              to discuss the study with someone not directly involved, or wish to
+              make a confidential complaint, contact the Ethics Office on (08) 9266
+              9223 or HREC@curtin.edu.au, or the Manager, Research Integrity on
+              (08) 9266 7093.
             </p>
           </div>
         </details>
@@ -165,10 +195,21 @@ export default function Login({ condition, onLogin }) {
               teaching resources.
             </li>
             <li>
+              You consent to aggregate findings and anonymous excerpts from this
+              study being shared with other researchers and published in
+              peer-reviewed outlets and open-access resources.
+            </li>
+            <li>
               You understand you may stop participating at any time during the
               session. Because no identifying information is collected, withdrawal
               after the session is not possible as individual records cannot be
               identified.
+            </li>
+            <li>
+              I understand that this project has been approved by Curtin
+              University Human Research Ethics Committee and will be carried out
+              in line with the National Statement on Ethical Conduct in Human
+              Research (2025).
             </li>
           </ul>
         </div>
