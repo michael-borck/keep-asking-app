@@ -38,12 +38,14 @@ export default function Login({ condition, onLogin }) {
     setError("");
 
     try {
+      const token = new URLSearchParams(window.location.search).get("token");
       const res = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           condition: condition,
           consented: consented,
+          token: token,
           first_in_family: consented ? (firstInFamily || "Prefer not to say") : null,
           low_ses: consented ? (lowSes || "Prefer not to say") : null,
         }),

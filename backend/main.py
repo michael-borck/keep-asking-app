@@ -230,6 +230,7 @@ def startup():
 class LoginRequest(BaseModel):
     condition: str | None = None
     consented: bool = True
+    token: str | None = None
     first_in_family: str | None = None
     low_ses: str | None = None
 
@@ -316,31 +317,36 @@ def session_status(lab: str | None = Query(None), token: str | None = Query(None
 @app.post("/api/login", response_model=LoginResponse)
 def login(req: LoginRequest):
     consented = req.consented
-    is_test = not consented
 
-    # Lab session gate (token-based test access bypasses this at /api/session-status)
+    # A session is a TEST session if it uses the valid test token OR the student does
+    # not consent. Test sessions are excluded from analysis AND never have their
+    # conversation, survey, or equity indicators written to the database
+    # (see /api/chat and /api/survey). Only real, consenting sessions are recorded.
+    token_valid = bool(req.token and TEST_TOKEN and req.token == TEST_TOKEN)
+    is_test = token_valid or not consented
+
+    # Lab session gate. Real (non-test) sessions require an active lab window.
     lab_id = None
     active, lab_data, msg = is_lab_accepting_logins()
     if active:
         lab_id = lab_data["lab_id"]
     elif not is_test:
-        # Non-test sessions require an active lab session
         raise HTTPException(403, msg)
 
     session_code = generate_session_code()
     condition = req.condition if req.condition in ("nudge", "control") else assign_condition()
 
+    # Equity indicators are research data — store them only for real consenting sessions.
+    keep_equity = consented and not is_test
     db.create_session(
         session_code, condition, is_test, lab_id=lab_id,
-        first_in_family=req.first_in_family if consented else None,
-        low_ses=req.low_ses if consented else None,
+        first_in_family=req.first_in_family if keep_equity else None,
+        low_ses=req.low_ses if keep_equity else None,
     )
 
-    if not consented:
-        label = "NO-CONSENT session"
-    else:
-        label = "Session"
-    db.log_turn(session_code, "system", f"{label} started. Condition: {condition}", 0)
+    # Real sessions get a start marker; test / non-consent sessions log nothing.
+    if not is_test:
+        db.log_turn(session_code, "system", f"Session started. Condition: {condition}", 0)
 
     return LoginResponse(session_code=session_code, condition=condition, consented=consented, lab_id=lab_id)
 
@@ -358,19 +364,23 @@ def chat(req: ChatRequest):
     if not message:
         raise HTTPException(400, "Message is required")
 
+    # Test / non-consent sessions are never written to the database.
+    log_enabled = not session["is_test"]
+
     # Determine turn number from existing turns
     conversation = _get_conversation(req.session_code)
     turn_number = sum(1 for m in conversation if m["role"] == "user") + 1
 
-    # Log and append user message
-    db.log_turn(req.session_code, "user", message, turn_number)
+    # Append user message (logged only for real sessions)
+    if log_enabled:
+        db.log_turn(req.session_code, "user", message, turn_number)
     conversation.append({"role": "user", "content": message})
 
     # Call AI
     ai_response = call_ai(conversation, get_system_prompt())
 
-    # Log raw AI response
-    db.log_turn(req.session_code, "assistant_raw", ai_response, turn_number)
+    if log_enabled:
+        db.log_turn(req.session_code, "assistant_raw", ai_response, turn_number)
 
     # Append nudge if nudge condition
     if session["condition"] == "nudge":
@@ -378,8 +388,8 @@ def chat(req: ChatRequest):
     else:
         display_response = ai_response
 
-    # Log what the student sees
-    db.log_turn(req.session_code, "assistant_display", display_response, turn_number)
+    if log_enabled:
+        db.log_turn(req.session_code, "assistant_display", display_response, turn_number)
 
     # Cache raw response for AI context (model never sees the nudge)
     conversation.append({"role": "assistant", "content": ai_response})
@@ -436,7 +446,9 @@ def finish_session(req: FinishRequest):
     if session.get("chat_locked"):
         return {"locked": True}  # idempotent
     db.lock_chat(req.session_code)
-    db.log_turn(req.session_code, "system", "Student clicked Finish Task", 0)
+    # Test / non-consent sessions are never written to the turns table.
+    if not session["is_test"]:
+        db.log_turn(req.session_code, "system", "Student clicked Finish Task", 0)
     return {"locked": True}
 
 
@@ -451,6 +463,9 @@ def submit_survey(req: SurveyRequest):
     session = db.get_session(req.session_code)
     if not session:
         raise HTTPException(404, "Session not found")
+    # Test / non-consent sessions are never written to the database.
+    if session["is_test"]:
+        return {"submitted": True}
     if session.get("survey_completed"):
         return {"submitted": True}  # idempotent
 

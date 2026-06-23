@@ -3,8 +3,10 @@ SQLite database for keep-asking.
 
 Schema:
   sessions  - one row per login (session_code, condition, test flag)
-  linkage   - student_number ↔ session_code (destroyed on deidentify)
   turns     - every message exchanged (user, assistant_raw, assistant_display, system)
+  survey_responses - one row per completed exit survey
+
+No identifiers are stored: sessions are keyed only by a random session_code.
 """
 
 import sqlite3
@@ -37,11 +39,6 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
             condition     TEXT NOT NULL CHECK (condition IN ('nudge', 'control')),
             is_test       INTEGER NOT NULL DEFAULT 0,
             created_at    TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS linkage (
-            student_number TEXT PRIMARY KEY,
-            session_code   TEXT NOT NULL REFERENCES sessions(session_code)
         );
 
         CREATE TABLE IF NOT EXISTS turns (
@@ -122,28 +119,6 @@ def list_sessions() -> list[dict]:
         GROUP BY s.session_code
     """).fetchall()
     return [dict(r) for r in rows]
-
-
-# ---------------------------------------------------------------------------
-# Linkage helpers
-# ---------------------------------------------------------------------------
-
-def get_session_code_for_student(student_number: str) -> str | None:
-    row = get_conn().execute(
-        "SELECT session_code FROM linkage WHERE student_number = ?",
-        (student_number,),
-    ).fetchone()
-    return row["session_code"] if row else None
-
-
-def create_linkage(student_number: str, session_code: str) -> None:
-    conn = get_conn()
-    conn.execute(
-        "INSERT INTO linkage (student_number, session_code) VALUES (?, ?)",
-        (student_number, session_code),
-    )
-    conn.commit()
-
 
 
 # ---------------------------------------------------------------------------
