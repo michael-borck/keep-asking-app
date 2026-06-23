@@ -17,6 +17,13 @@
   width: 100%;
 }
 
+.curtin-logo {
+  display: block;
+  height: 34px;
+  width: auto;
+  margin: 0 0 24px;
+}
+
 .consent-card .study-description {
   color: var(--text-h);
   font-size: 15px;
