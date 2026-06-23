@@ -109,6 +109,7 @@ itself). System prompt and nudge pool are configurable via `prompts.json` and
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/version` | GET | Build stamp (short commit SHA + build time) of the running image |
 | `/api/session-status` | GET | Is a lab session active? (a valid `token` bypasses the time check) |
 | `/api/login` | POST | Start a session; returns a random session code + condition |
 | `/api/chat` | POST | Send a message, get the AI reply (with nudge for the nudge arm) |
@@ -130,3 +131,14 @@ itself). System prompt and nudge pool are configurable via `prompts.json` and
 
 Sessions are keyed only by a random code; no name, email, or student number is
 collected or written.
+
+## Versioning
+
+The GitHub Actions build injects the short commit SHA and build time into the image
+(`build.yml` → `Dockerfile` build args). They surface two ways, so you can confirm
+which build the VPS is running:
+
+- a small **version badge** in the bottom-right of the UI (`v<sha>`), and
+- **`GET /api/version`** → `{"version": "<sha>", "built": "<UTC time>"}`.
+
+Local/dev builds with no build arg show `dev build`.

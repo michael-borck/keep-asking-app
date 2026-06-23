@@ -52,6 +52,11 @@ DEMO_ENABLED = os.getenv("DEMO_ENABLED", "").strip().lower() in ("1", "true", "y
 DEMO_MODEL = os.getenv("DEMO_MODEL", "claude-haiku-4-5-20251001")
 DEMO_TURN_CAP = int(os.getenv("DEMO_TURN_CAP", "12"))
 
+# Build stamp — injected at image build (see Dockerfile / build.yml). Shown in the
+# UI and at /api/version so a deployment can be identified.
+APP_VERSION = os.getenv("APP_VERSION", "dev")
+BUILD_TIME = os.getenv("BUILD_TIME", "")
+
 # Config file resolution: check CONFIG_DIR (Docker volume mount) first,
 # then fall back to the backend directory (local dev).
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/app/config"))
@@ -307,6 +312,12 @@ def _get_conversation(session_code: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/api/version")
+def version():
+    """Build stamp of the running image (for verifying a deployment)."""
+    return {"version": APP_VERSION, "built": BUILD_TIME}
+
 
 @app.get("/api/session-status")
 def session_status(lab: str | None = Query(None), token: str | None = Query(None), demo: str | None = Query(None)):

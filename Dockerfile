@@ -1,5 +1,9 @@
 # Stage 1: Build the React frontend
 FROM node:22-alpine AS frontend-build
+ARG APP_VERSION=dev
+ARG BUILD_TIME=
+ENV VITE_APP_VERSION=$APP_VERSION
+ENV VITE_BUILD_TIME=$BUILD_TIME
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -8,6 +12,10 @@ RUN npm run build
 
 # Stage 2: Python backend + built frontend
 FROM python:3.12-slim
+ARG APP_VERSION=dev
+ARG BUILD_TIME=
+ENV APP_VERSION=$APP_VERSION
+ENV BUILD_TIME=$BUILD_TIME
 WORKDIR /app
 
 # Install Python dependencies

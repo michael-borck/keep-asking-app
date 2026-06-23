@@ -7,6 +7,8 @@ import NoSession from "./NoSession";
 import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || "dev";
+const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || "";
 
 // App states: checking | no-session | login | chat | survey | thankyou
 export default function App({ condition }) {
@@ -96,32 +98,53 @@ export default function App({ condition }) {
     }
   }
 
-  switch (appState) {
-    case "checking":
-      return (
-        <div className="loading-container">
-          <p>Loading...</p>
-        </div>
-      );
-    case "no-session":
-      return <NoSession />;
-    case "login":
-      return <Login condition={condition} onLogin={handleLogin} />;
-    case "chat":
-      return (
-        <Chat
-          session={session}
-          onFinish={handleFinish}
-          onSessionState={handleSessionState}
-        />
-      );
-    case "survey":
-      return (
-        <Survey session={session} onComplete={handleSurveyComplete} />
-      );
-    case "thankyou":
-      return <ThankYou />;
-    default:
-      return null;
+  function renderState() {
+    switch (appState) {
+      case "checking":
+        return (
+          <div className="loading-container">
+            <p>Loading...</p>
+          </div>
+        );
+      case "no-session":
+        return <NoSession />;
+      case "login":
+        return <Login condition={condition} onLogin={handleLogin} />;
+      case "chat":
+        return (
+          <Chat
+            session={session}
+            onFinish={handleFinish}
+            onSessionState={handleSessionState}
+          />
+        );
+      case "survey":
+        return <Survey session={session} onComplete={handleSurveyComplete} />;
+      case "thankyou":
+        return <ThankYou />;
+      default:
+        return null;
+    }
   }
+
+  return (
+    <>
+      {renderState()}
+      <div
+        style={{
+          position: "fixed",
+          bottom: "6px",
+          right: "8px",
+          fontSize: "11px",
+          fontFamily: "monospace",
+          color: "#9ca3af",
+          opacity: 0.7,
+          pointerEvents: "none",
+        }}
+        title={BUILD_TIME ? `built ${BUILD_TIME}` : ""}
+      >
+        {APP_VERSION === "dev" ? "dev build" : `v${APP_VERSION}`}
+      </div>
+    </>
+  );
 }
