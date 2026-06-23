@@ -22,6 +22,7 @@ import tempfile
 
 # Env must be set before importing main (read at module import time).
 os.environ["TEST_TOKEN"] = "verify-secret-token"
+os.environ["DEMO_ENABLED"] = "1"
 os.environ.setdefault("ANTHROPIC_API_KEY", "unused-stub")
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="keepasking-verify-")
 
@@ -31,8 +32,16 @@ import db     # noqa: E402
 TOKEN = os.environ["TEST_TOKEN"]
 db.init_db(main.DATA_DIR)
 
-# Stub the model call so no network / API key is needed.
-main.call_ai = lambda messages, system: "Canned reply for verification."
+# Stub the model call so no network / API key is needed; record the model used.
+_calls = []
+
+
+def _stub_call_ai(messages, system, model=None):
+    _calls.append(model)
+    return "Canned reply for verification."
+
+
+main.call_ai = _stub_call_ai
 
 _failures = []
 
@@ -98,6 +107,24 @@ try:
     check("equity indicators stored", s["first_in_family"] == "Yes" and s["low_ses"] == "No")
 finally:
     main.is_lab_accepting_logins = _orig_lab
+
+# --- Scenario 4: public demo session — token-free, writes nothing, Haiku, capped ---
+print("\n[4] Demo session (DEMO_ENABLED) — token-free — writes nothing, Haiku-pinned, capped:")
+# Lab is inactive at test time, proving demo bypasses the time gate without a token.
+code = main.login(main.LoginRequest(condition="nudge", consented=True, demo=True)).session_code
+s = db.get_session(code)
+check("flagged is_test", s["is_test"] == 1)
+check("flagged is_demo", s["is_demo"] == 1)
+_calls.clear()
+for i in range(main.DEMO_TURN_CAP):
+    main.chat(main.ChatRequest(session_code=code, message=f"demo message {i + 1}"))
+check(f"{main.DEMO_TURN_CAP} turns made {main.DEMO_TURN_CAP} AI calls", len(_calls) == main.DEMO_TURN_CAP)
+check("demo pinned to the cheap model", all(m == main.DEMO_MODEL for m in _calls))
+before = len(_calls)
+capped_reply = main.chat(main.ChatRequest(session_code=code, message="one too many")).reply
+check("turn over the cap makes no AI call", len(_calls) == before)
+check("cap message shown", "demo limit" in capped_reply.lower())
+check("demo wrote nothing to turns", transcript(code) == [])
 
 print()
 if _failures:

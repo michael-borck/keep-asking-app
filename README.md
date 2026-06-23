@@ -40,8 +40,15 @@ Logins are accepted only during a configured lab-session window
 `?token=<TEST_TOKEN>` (set on the server). The token is for facilitators /
 co-investigators only.
 
-Sessions started via the token, and any non-consenting sessions, are flagged
-`is_test` and excluded from analysis.
+Sessions started via the token or in demo mode, and any non-consenting sessions,
+are flagged `is_test` and excluded from analysis.
+
+**Demo mode (optional).** With `DEMO_ENABLED=true`, append `?demo=1` to share a
+token-free, throwaway session (e.g. `/session/a?demo=1` for nudge, `/session/b?demo=1`
+for control). Demo sessions write **nothing** to the database, are pinned to
+`DEMO_MODEL` (a cheap model), and are capped at `DEMO_TURN_CAP` turns. Leave it
+**off** during data collection — it shares the API key/quota — and set a spend limit
+on the API account while it is on.
 
 ## Quick Start
 

@@ -44,6 +44,14 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 # Secret token for bypassing session check (set in .env, use as ?token=<value>)
 TEST_TOKEN = os.getenv("TEST_TOKEN", "")
 
+# Public demo mode (no token). When enabled, ?demo=1 opens a throwaway session that
+# writes nothing to the database, is pinned to a cheap model, and is capped at
+# DEMO_TURN_CAP turns. OFF by default — enable only for short demos, never during
+# live data collection (it shares the API key/quota with real sessions).
+DEMO_ENABLED = os.getenv("DEMO_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+DEMO_MODEL = os.getenv("DEMO_MODEL", "claude-haiku-4-5-20251001")
+DEMO_TURN_CAP = int(os.getenv("DEMO_TURN_CAP", "12"))
+
 # Config file resolution: check CONFIG_DIR (Docker volume mount) first,
 # then fall back to the backend directory (local dev).
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/app/config"))
@@ -231,6 +239,7 @@ class LoginRequest(BaseModel):
     condition: str | None = None
     consented: bool = True
     token: str | None = None
+    demo: bool = False
     first_in_family: str | None = None
     low_ses: str | None = None
 
@@ -268,12 +277,12 @@ def assign_condition() -> str:
     return random.choice(["nudge", "control"])
 
 
-def call_ai(messages: list[dict], system: str) -> str:
+def call_ai(messages: list[dict], system: str, model: str | None = None) -> str:
     if not ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY not set")
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
-        model=ANTHROPIC_MODEL,
+        model=model or ANTHROPIC_MODEL,
         max_tokens=1024,
         system=system,
         messages=messages,
@@ -300,11 +309,14 @@ def _get_conversation(session_code: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 @app.get("/api/session-status")
-def session_status(lab: str | None = Query(None), token: str | None = Query(None)):
+def session_status(lab: str | None = Query(None), token: str | None = Query(None), demo: str | None = Query(None)):
     """Check whether a lab session is currently active (server clock)."""
     # Valid test token bypasses the time check
     if token and TEST_TOKEN and token == TEST_TOKEN:
         return {"active": True, "lab_id": None, "message": "Test mode"}
+    # Public demo mode (when enabled) is always open and writes nothing
+    if DEMO_ENABLED and demo:
+        return {"active": True, "lab_id": None, "message": "Demo mode"}
 
     active, lab_data, message = is_lab_accepting_logins(lab)
     return {
@@ -318,12 +330,15 @@ def session_status(lab: str | None = Query(None), token: str | None = Query(None
 def login(req: LoginRequest):
     consented = req.consented
 
-    # A session is a TEST session if it uses the valid test token OR the student does
-    # not consent. Test sessions are excluded from analysis AND never have their
-    # conversation, survey, or equity indicators written to the database
-    # (see /api/chat and /api/survey). Only real, consenting sessions are recorded.
+    # A session is a TEST session if it uses the valid test token, is a public demo,
+    # or the student does not consent. Test sessions are excluded from analysis AND
+    # never have their conversation, survey, or equity indicators written to the
+    # database (see /api/chat and /api/survey). Demo sessions are additionally pinned
+    # to a cheap model and capped (see /api/chat). Only real, consenting sessions are
+    # recorded.
     token_valid = bool(req.token and TEST_TOKEN and req.token == TEST_TOKEN)
-    is_test = token_valid or not consented
+    is_demo = bool(DEMO_ENABLED and req.demo)
+    is_test = token_valid or is_demo or not consented
 
     # Lab session gate. Real (non-test) sessions require an active lab window.
     lab_id = None
@@ -342,6 +357,7 @@ def login(req: LoginRequest):
         session_code, condition, is_test, lab_id=lab_id,
         first_in_family=req.first_in_family if keep_equity else None,
         low_ses=req.low_ses if keep_equity else None,
+        is_demo=is_demo,
     )
 
     # Real sessions get a start marker; test / non-consent sessions log nothing.
@@ -366,18 +382,27 @@ def chat(req: ChatRequest):
 
     # Test / non-consent sessions are never written to the database.
     log_enabled = not session["is_test"]
+    is_demo = bool(session["is_demo"])
 
     # Determine turn number from existing turns
     conversation = _get_conversation(req.session_code)
     turn_number = sum(1 for m in conversation if m["role"] == "user") + 1
+
+    # Public demo sessions are capped to bound API cost.
+    if is_demo and turn_number > DEMO_TURN_CAP:
+        return ChatResponse(
+            reply=(f"You've reached the demo limit of {DEMO_TURN_CAP} messages. "
+                   "Thanks for trying it — reload the page to start over."),
+            turn_number=DEMO_TURN_CAP,
+        )
 
     # Append user message (logged only for real sessions)
     if log_enabled:
         db.log_turn(req.session_code, "user", message, turn_number)
     conversation.append({"role": "user", "content": message})
 
-    # Call AI
-    ai_response = call_ai(conversation, get_system_prompt())
+    # Call AI (demo sessions are pinned to a cheap model)
+    ai_response = call_ai(conversation, get_system_prompt(), model=DEMO_MODEL if is_demo else None)
 
     if log_enabled:
         db.log_turn(req.session_code, "assistant_raw", ai_response, turn_number)

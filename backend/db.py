@@ -71,6 +71,7 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
         ("chat_locked", "INTEGER NOT NULL DEFAULT 0"),
         ("first_in_family", "TEXT"),
         ("low_ses", "TEXT"),
+        ("is_demo", "INTEGER NOT NULL DEFAULT 0"),
     ]:
         try:
             _conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {typedef}")
@@ -90,18 +91,19 @@ def create_session(
     lab_id: str | None = None,
     first_in_family: str | None = None,
     low_ses: str | None = None,
+    is_demo: bool = False,
 ) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO sessions (session_code, condition, is_test, created_at, lab_id, first_in_family, low_ses) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (session_code, condition, int(is_test), datetime.utcnow().isoformat(), lab_id, first_in_family, low_ses),
+        "INSERT INTO sessions (session_code, condition, is_test, is_demo, created_at, lab_id, first_in_family, low_ses) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (session_code, condition, int(is_test), int(is_demo), datetime.utcnow().isoformat(), lab_id, first_in_family, low_ses),
     )
     conn.commit()
 
 
 def get_session(session_code: str) -> dict | None:
     row = get_conn().execute(
-        "SELECT session_code, condition, is_test, created_at, lab_id, survey_completed, chat_locked, first_in_family, low_ses FROM sessions WHERE session_code = ?",
+        "SELECT session_code, condition, is_test, is_demo, created_at, lab_id, survey_completed, chat_locked, first_in_family, low_ses FROM sessions WHERE session_code = ?",
         (session_code,),
     ).fetchone()
     if row is None:

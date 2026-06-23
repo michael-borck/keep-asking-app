@@ -45,6 +45,7 @@ export default function App({ condition }) {
       const query = new URLSearchParams();
       if (params.get("lab")) query.set("lab", params.get("lab"));
       if (params.get("token")) query.set("token", params.get("token"));
+      if (params.get("demo")) query.set("demo", params.get("demo"));
       const qs = query.toString();
       const url = `${API_URL}/api/session-status${qs ? `?${qs}` : ""}`;
       const res = await fetch(url);
