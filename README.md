@@ -35,8 +35,10 @@ Routes (React Router):
 - `/session/b` — force **control** (silent) — facilitator/test override
 
 Logins are accepted only during a configured lab-session window
-(`backend/lab_sessions.json`, server clock, UTC). Outside a window students see a
-"no active session" screen. For testing outside a window, append
+(`backend/lab_sessions.json`, server clock, UTC). The file is hot-reloaded on
+change — edits take effect without a restart. `GET /api/labs` shows the configured
+schedule and which windows are active now (read-only, for facilitator self-checks).
+Outside a window students see a "no active session" screen. For testing outside a window, append
 `?token=<TEST_TOKEN>` (set on the server). The token is for facilitators /
 co-investigators only.
 
@@ -119,6 +121,7 @@ itself). System prompt and nudge pool are configurable via `prompts.json` and
 |----------|--------|-------------|
 | `/api/version` | GET | Build stamp (short commit SHA + build time) of the running image |
 | `/api/session-status` | GET | Is a lab session active? (a valid `token` bypasses the time check) |
+| `/api/labs` | GET | Read-only lab schedule + which windows are active now |
 | `/api/login` | POST | Start a session; returns a random session code + condition |
 | `/api/chat` | POST | Send a message, get the AI reply (with nudge for the nudge arm) |
 | `/api/finish` | POST | Lock the chat (student clicked Finish Task) |

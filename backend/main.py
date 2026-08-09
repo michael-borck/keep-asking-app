@@ -164,16 +164,16 @@ def get_system_prompt() -> str:
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Lab session schedule — loaded from JSON config file at startup.
-LAB_SESSIONS_FILE = _config_path("lab_sessions.json")
-
-
-def _load_lab_sessions() -> list[dict]:
-    if not LAB_SESSIONS_FILE.exists():
+# Lab session schedule — hot-reloaded from JSON config: the file is re-read
+# whenever its path or mtime changes, so schedule edits on the VPS take effect
+# without a container restart. An invalid edit keeps the schedule empty (and
+# logs) rather than serving a stale one — same behaviour as a restart.
+def _load_lab_sessions(path: Path) -> list[dict]:
+    if not path.exists():
         logger.warning("lab_sessions.json not found — no lab sessions configured")
         return []
     try:
-        with open(LAB_SESSIONS_FILE) as f:
+        with open(path) as f:
             sessions = json.load(f)
         if not isinstance(sessions, list):
             raise ValueError("lab_sessions.json must be a JSON array")
@@ -187,7 +187,20 @@ def _load_lab_sessions() -> list[dict]:
         return []
 
 
-LAB_SESSIONS: list[dict] = _load_lab_sessions()
+_lab_sessions_cache: tuple[str, float, list[dict]] | None = None
+
+
+def get_lab_sessions() -> list[dict]:
+    """Return the current lab schedule, re-reading the file when it changes."""
+    global _lab_sessions_cache
+    path = _config_path("lab_sessions.json")
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = -1.0
+    if _lab_sessions_cache is None or _lab_sessions_cache[:2] != (str(path), mtime):
+        _lab_sessions_cache = (str(path), mtime, _load_lab_sessions(path))
+    return _lab_sessions_cache[2]
 
 
 def get_active_lab_sessions(lab: str | None = None) -> list[dict]:
@@ -196,7 +209,7 @@ def get_active_lab_sessions(lab: str | None = None) -> list[dict]:
     links can use a stable unit code while JSON entries stay per-day."""
     now = datetime.now(timezone.utc)
     active = []
-    for entry in LAB_SESSIONS:
+    for entry in get_lab_sessions():
         if lab and entry["lab_id"] != lab and entry.get("unit_code") != lab:
             continue
         start = datetime.fromisoformat(entry["start_time"])
@@ -338,6 +351,30 @@ def session_status(lab: str | None = Query(None), token: str | None = Query(None
         "active": active,
         "lab_id": lab_data["lab_id"] if lab_data else None,
         "message": message,
+    }
+
+
+@app.get("/api/labs")
+def labs_status():
+    """Read-only view of the configured lab schedule and what is active now,
+    so a facilitator can self-check the gate without SSH access."""
+    now = datetime.now(timezone.utc)
+    return {
+        "server_time_utc": now.isoformat(),
+        "labs": [
+            {
+                "lab_id": e["lab_id"],
+                "unit_code": e.get("unit_code"),
+                "start_time": e["start_time"],
+                "end_time": e["end_time"],
+                "active": (
+                    datetime.fromisoformat(e["start_time"])
+                    <= now
+                    <= datetime.fromisoformat(e["end_time"])
+                ),
+            }
+            for e in get_lab_sessions()
+        ],
     }
 
 
