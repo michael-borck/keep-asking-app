@@ -232,7 +232,7 @@ def is_lab_accepting_logins(lab: str | None = None) -> tuple[bool, dict | None, 
 # App
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="keep-asking prototype")
+app = FastAPI(title="AI Lab Session API")
 
 app.add_middleware(
     CORSMiddleware,
