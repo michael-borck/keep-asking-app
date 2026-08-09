@@ -41,6 +41,7 @@ export default function Login({ condition, onLogin }) {
       const search = new URLSearchParams(window.location.search);
       const token = search.get("token");
       const demo = search.get("demo") === "1";
+      const lab = search.get("lab");
       const res = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,6 +50,7 @@ export default function Login({ condition, onLogin }) {
           consented: consented,
           token: token,
           demo: demo,
+          lab: lab,
           first_in_family: consented ? (firstInFamily || "Prefer not to say") : null,
           low_ses: consented ? (lowSes || "Prefer not to say") : null,
         }),

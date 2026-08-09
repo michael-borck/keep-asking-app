@@ -40,6 +40,14 @@ Logins are accepted only during a configured lab-session window
 `?token=<TEST_TOKEN>` (set on the server). The token is for facilitators /
 co-investigators only.
 
+**Per-unit links.** Give each lecturer a link with `?lab=<unit_code>` (e.g.
+`/session?lab=MKTG1000`). The parameter matches a window's `unit_code` or `lab_id`,
+narrows the login gate to that unit's windows, and stamps the session with the
+matched `lab_id` — so overlapping windows from different units attribute correctly.
+Without the parameter, the session is attributed only if exactly one window is
+active; if several units overlap, `lab_id` is left empty (recover the unit from
+transcript context).
+
 Sessions started via the token or in demo mode, and any non-consenting sessions,
 are flagged `is_test` and excluded from analysis.
 

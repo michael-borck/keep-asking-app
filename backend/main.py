@@ -190,25 +190,28 @@ def _load_lab_sessions() -> list[dict]:
 LAB_SESSIONS: list[dict] = _load_lab_sessions()
 
 
-def get_active_lab_session(lab_id: str | None = None) -> dict | None:
-    """Return a lab session whose time window contains UTC now, or None."""
+def get_active_lab_sessions(lab: str | None = None) -> list[dict]:
+    """Return all lab sessions whose time window contains UTC now.
+    `lab` (from a ?lab= link) matches either lab_id or unit_code, so lecturer
+    links can use a stable unit code while JSON entries stay per-day."""
     now = datetime.now(timezone.utc)
-    for lab in LAB_SESSIONS:
-        if lab_id and lab["lab_id"] != lab_id:
+    active = []
+    for entry in LAB_SESSIONS:
+        if lab and entry["lab_id"] != lab and entry.get("unit_code") != lab:
             continue
-        start = datetime.fromisoformat(lab["start_time"])
-        end = datetime.fromisoformat(lab["end_time"])
+        start = datetime.fromisoformat(entry["start_time"])
+        end = datetime.fromisoformat(entry["end_time"])
         if start <= now <= end:
-            return lab
-    return None
+            active.append(entry)
+    return active
 
 
-def is_lab_accepting_logins(lab_id: str | None = None) -> tuple[bool, dict | None, str]:
+def is_lab_accepting_logins(lab: str | None = None) -> tuple[bool, dict | None, str]:
     """Check if there is an active lab session accepting new logins.
     Returns (active, lab_dict_or_none, message)."""
-    lab = get_active_lab_session(lab_id)
-    if lab:
-        return True, lab, "Session active"
+    active = get_active_lab_sessions(lab)
+    if active:
+        return True, active[0], "Session active"
     return False, None, "No active session. Please wait for your facilitator."
 
 
@@ -245,6 +248,7 @@ class LoginRequest(BaseModel):
     consented: bool = True
     token: str | None = None
     demo: bool = False
+    lab: str | None = None
     first_in_family: str | None = None
     low_ses: str | None = None
 
@@ -352,12 +356,17 @@ def login(req: LoginRequest):
     is_test = token_valid or is_demo or not consented
 
     # Lab session gate. Real (non-test) sessions require an active lab window.
+    # A ?lab= link narrows the gate to that unit's windows and pins attribution.
+    # Without one, attribute only when a single window is active — if several
+    # units overlap, leave lab_id empty rather than guess (unit is recovered
+    # from transcript context in that case).
     lab_id = None
-    active, lab_data, msg = is_lab_accepting_logins()
-    if active:
-        lab_id = lab_data["lab_id"]
+    active_labs = get_active_lab_sessions(req.lab)
+    if active_labs:
+        if req.lab or len(active_labs) == 1:
+            lab_id = active_labs[0]["lab_id"]
     elif not is_test:
-        raise HTTPException(403, msg)
+        raise HTTPException(403, "No active session. Please wait for your facilitator.")
 
     session_code = generate_session_code()
     condition = req.condition if req.condition in ("nudge", "control") else assign_condition()
