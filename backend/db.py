@@ -72,9 +72,20 @@ def init_db(data_dir: Path) -> sqlite3.Connection:
         ("first_in_family", "TEXT"),
         ("low_ses", "TEXT"),
         ("is_demo", "INTEGER NOT NULL DEFAULT 0"),
+        ("campus", "TEXT"),
+        ("timezone", "TEXT"),
     ]:
         try:
             _conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {typedef}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
+    # survey_responses too — an existing database created by an older build
+    # keeps its old table (CREATE TABLE IF NOT EXISTS never upgrades), which
+    # made every survey INSERT crash in the 2026-08-10 MGMT6076 session.
+    for col in ["lab_id", "timestamp_submitted"] + SURVEY_COLUMNS:
+        try:
+            _conn.execute(f"ALTER TABLE survey_responses ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
 
@@ -92,18 +103,20 @@ def create_session(
     first_in_family: str | None = None,
     low_ses: str | None = None,
     is_demo: bool = False,
+    campus: str | None = None,
+    timezone: str | None = None,
 ) -> None:
     conn = get_conn()
     conn.execute(
-        "INSERT INTO sessions (session_code, condition, is_test, is_demo, created_at, lab_id, first_in_family, low_ses) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (session_code, condition, int(is_test), int(is_demo), datetime.utcnow().isoformat(), lab_id, first_in_family, low_ses),
+        "INSERT INTO sessions (session_code, condition, is_test, is_demo, created_at, lab_id, first_in_family, low_ses, campus, timezone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (session_code, condition, int(is_test), int(is_demo), datetime.utcnow().isoformat(), lab_id, first_in_family, low_ses, campus, timezone),
     )
     conn.commit()
 
 
 def get_session(session_code: str) -> dict | None:
     row = get_conn().execute(
-        "SELECT session_code, condition, is_test, is_demo, created_at, lab_id, survey_completed, chat_locked, first_in_family, low_ses FROM sessions WHERE session_code = ?",
+        "SELECT session_code, condition, is_test, is_demo, created_at, lab_id, campus, timezone, survey_completed, chat_locked, first_in_family, low_ses FROM sessions WHERE session_code = ?",
         (session_code,),
     ).fetchone()
     if row is None:
