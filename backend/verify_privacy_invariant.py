@@ -58,7 +58,8 @@ def transcript(code):
 
 def run_session(*, consented, token=None, condition="nudge", equity=None):
     """Drive a full session: login -> chat -> finish -> survey. Returns the code."""
-    body = {"condition": condition, "consented": consented, "token": token}
+    body = {"condition": condition, "consented": consented, "token": token,
+            "timezone": "Australia/Perth"}
     if equity:
         body.update(equity)
     code = main.login(main.LoginRequest(**body)).session_code
@@ -83,16 +84,18 @@ check("flagged is_test", s["is_test"] == 1)
 check("no rows in turns", transcript(code) == [])
 check("survey not recorded", s["survey_completed"] == 0)
 check("equity indicators not stored", s["first_in_family"] is None and s["low_ses"] is None)
+check("timezone not stored", s["timezone"] is None)
 
 # --- Scenario 2: decline (during an active lab window) writes nothing ---
 print("\n[2] Non-consenting session — during an active lab window — writes nothing:")
-_orig_lab = main.is_lab_accepting_logins
-main.is_lab_accepting_logins = lambda lab_id=None: (True, {"lab_id": "VERIFY-LAB"}, "active")
+_orig_lab = main.get_active_lab_sessions
+main.get_active_lab_sessions = lambda lab=None: [{"lab_id": "VERIFY-LAB", "unit_code": "VERIFY"}]
 try:
     code = run_session(consented=False, condition="control")
     s = db.get_session(code)
     check("flagged is_test", s["is_test"] == 1)
     check("no rows in turns", transcript(code) == [])
+    check("timezone not stored", s["timezone"] is None)
 
     # --- Scenario 3: real consenting session IS recorded (positive control) ---
     print("\n[3] Real consenting session — during a lab window — IS recorded:")
@@ -105,8 +108,9 @@ try:
     check("assistant_raw logged", "assistant_raw" in roles)
     check("assistant_display logged", "assistant_display" in roles)
     check("equity indicators stored", s["first_in_family"] == "Yes" and s["low_ses"] == "No")
+    check("timezone stored", s["timezone"] == "Australia/Perth")
 finally:
-    main.is_lab_accepting_logins = _orig_lab
+    main.get_active_lab_sessions = _orig_lab
 
 # --- Scenario 4: public demo session — token-free, writes nothing, Haiku, capped ---
 print("\n[4] Demo session (DEMO_ENABLED) — token-free — writes nothing, Haiku-pinned, capped:")

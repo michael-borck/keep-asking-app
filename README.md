@@ -50,6 +50,12 @@ Without the parameter, the session is attributed only if exactly one window is
 active; if several units overlap, `lab_id` is left empty (recover the unit from
 transcript context).
 
+**Campus attribution.** A window entry may carry an optional `"campus"` field
+(e.g. `"BENTLEY"`, `"MIRI"`); the matched window's campus is stamped on the
+session. The browser's IANA timezone (e.g. `Australia/Perth`) is also recorded
+at login for real consenting sessions, as a protocol-compliance cross-check —
+it is coarse location only, no IP address is collected or stored.
+
 Sessions started via the token or in demo mode, and any non-consenting sessions,
 are flagged `is_test` and excluded from analysis.
 
@@ -133,8 +139,9 @@ itself). System prompt and nudge pool are configurable via `prompts.json` and
 ## Data (SQLite, `data/keep-asking.db`)
 
 - **`sessions`** — one row per login: `session_code`, `condition`, `is_test`,
-  `lab_id`, optional equity indicators, timestamps, and `chat_locked` /
-  `survey_completed` flags.
+  `lab_id`, `campus` (from the matched schedule entry), `timezone` (browser
+  IANA timezone, consenting sessions only), optional equity indicators,
+  timestamps, and `chat_locked` / `survey_completed` flags.
 - **`turns`** — every message, three rows per turn: `user` (what the student said),
   `assistant_raw` (what the model returned), `assistant_display` (what the student
   saw, including the nudge for the nudge arm).

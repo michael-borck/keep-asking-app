@@ -262,6 +262,7 @@ class LoginRequest(BaseModel):
     token: str | None = None
     demo: bool = False
     lab: str | None = None
+    timezone: str | None = None
     first_in_family: str | None = None
     low_ses: str | None = None
 
@@ -365,6 +366,7 @@ def labs_status():
             {
                 "lab_id": e["lab_id"],
                 "unit_code": e.get("unit_code"),
+                "campus": e.get("campus"),
                 "start_time": e["start_time"],
                 "end_time": e["end_time"],
                 "active": (
@@ -398,23 +400,29 @@ def login(req: LoginRequest):
     # units overlap, leave lab_id empty rather than guess (unit is recovered
     # from transcript context in that case).
     lab_id = None
+    campus = None
     active_labs = get_active_lab_sessions(req.lab)
     if active_labs:
         if req.lab or len(active_labs) == 1:
             lab_id = active_labs[0]["lab_id"]
+            campus = active_labs[0].get("campus")
     elif not is_test:
         raise HTTPException(403, "No active session. Please wait for your facilitator.")
 
     session_code = generate_session_code()
     condition = req.condition if req.condition in ("nudge", "control") else assign_condition()
 
-    # Equity indicators are research data — store them only for real consenting sessions.
+    # Equity indicators and the browser timezone (a protocol-compliance check,
+    # not an identifier) are research data — store them only for real consenting
+    # sessions. Campus comes from the matched schedule entry, not the client.
     keep_equity = consented and not is_test
     db.create_session(
         session_code, condition, is_test, lab_id=lab_id,
         first_in_family=req.first_in_family if keep_equity else None,
         low_ses=req.low_ses if keep_equity else None,
         is_demo=is_demo,
+        campus=campus,
+        timezone=(req.timezone or None) if keep_equity else None,
     )
 
     # Real sessions get a start marker; test / non-consent sessions log nothing.
