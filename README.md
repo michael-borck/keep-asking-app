@@ -56,6 +56,11 @@ session. The browser's IANA timezone (e.g. `Australia/Perth`) is also recorded
 at login for real consenting sessions, as a protocol-compliance cross-check —
 it is coarse location only, no IP address is collected or stored.
 
+**Teaching-only windows.** A window with `"research": false` (e.g. a campus not
+yet covered by the ethics approval) runs the identical tutorial, but every
+session in it is forced to test status: nothing is recorded, regardless of the
+student's consent choice. Remove the flag once approval covers that site.
+
 Sessions started via the token or in demo mode, and any non-consenting sessions,
 are flagged `is_test` and excluded from analysis.
 

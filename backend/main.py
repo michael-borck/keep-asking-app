@@ -367,6 +367,7 @@ def labs_status():
                 "lab_id": e["lab_id"],
                 "unit_code": e.get("unit_code"),
                 "campus": e.get("campus"),
+                "research": e.get("research", True),
                 "start_time": e["start_time"],
                 "end_time": e["end_time"],
                 "active": (
@@ -404,8 +405,15 @@ def login(req: LoginRequest):
     active_labs = get_active_lab_sessions(req.lab)
     if active_labs:
         if req.lab or len(active_labs) == 1:
-            lab_id = active_labs[0]["lab_id"]
-            campus = active_labs[0].get("campus")
+            entry = active_labs[0]
+            lab_id = entry["lab_id"]
+            campus = entry.get("campus")
+            # A window with "research": false is teaching-only (e.g. a campus
+            # not yet covered by the ethics approval): the tutorial runs
+            # identically, but the session is forced to test status so nothing
+            # is recorded — regardless of the student's consent choice.
+            if entry.get("research") is False:
+                is_test = True
     elif not is_test:
         raise HTTPException(403, "No active session. Please wait for your facilitator.")
 
