@@ -94,6 +94,23 @@
     border-radius: 10px; padding: 18px 20px; margin-bottom: 20px;
   }
 
+  /* ---- accordions ---- */
+  summary { cursor: pointer; user-select: none; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: "\25B8"; display: inline-block; margin-right: 8px;
+    color: var(--muted); transition: transform .15s; font-size: 12px;
+  }
+  details[open] > summary::before { transform: rotate(90deg); }
+  details.card > summary h2 { display: inline; }
+  details.card > summary { margin: -4px 0; padding: 4px 0; }
+  details.card[open] > summary { margin-bottom: 12px; }
+  .linkbtn {
+    background: none; border: none; padding: 0; color: var(--muted);
+    font-size: 12px; text-decoration: underline; cursor: pointer;
+  }
+  .linkbtn:hover { color: var(--ink-2); filter: none; }
+
   /* ---- legend ---- */
   .legend { display: flex; gap: 18px; font-size: 12px; color: var(--ink-2); margin-bottom: 14px; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -223,23 +240,28 @@
     <div class="hlabels" id="histLabels"></div>
   </div>
 
-  <div class="card">
-    <h2>Exit survey responses <span class="sub" id="surveyCount"></span></h2>
+  <details class="card" open>
+    <summary><h2>Exit survey responses <span class="sub" id="surveyCount"></span></h2></summary>
     <div class="legend">
       <span><span class="swatch nudge"></span>Nudge</span>
       <span><span class="swatch control"></span>Control</span>
       <span class="sub">bars show % within condition; labels show raw counts</span>
+      <span style="margin-left:auto">
+        <button class="linkbtn" onclick="toggleQuestions(true)">expand all</button>
+        &nbsp;·&nbsp;
+        <button class="linkbtn" onclick="toggleQuestions(false)">collapse all</button>
+      </span>
     </div>
     <div id="surveyCharts"></div>
-  </div>
+  </details>
 
-  <div class="card">
-    <h2>Free-text comments</h2>
+  <details class="card">
+    <summary><h2>Free-text comments <span class="sub" id="freeTextCount"></span></h2></summary>
     <div id="freeText"></div>
-  </div>
+  </details>
 
-  <div class="card">
-    <h2>Sessions <span class="sub">(click a row to view its transcript)</span></h2>
+  <details class="card">
+    <summary><h2>Sessions <span class="sub" id="sessionCount"></span></h2></summary>
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
@@ -249,7 +271,7 @@
         <tbody id="sessionRows"></tbody>
       </table>
     </div>
-  </div>
+  </details>
 </div>
 
 <div id="modal" onclick="if(event.target===this)closeModal()">
@@ -484,6 +506,9 @@ function renderSurveyCharts(surveys) {
     return;
   }
 
+  // Preserve which question accordions are open across filter changes.
+  const openQs = new Set([...document.querySelectorAll("#surveyCharts details[open]")].map((d) => d.dataset.q));
+
   $("surveyCharts").innerHTML = QUESTIONS.map((q) => {
     const rows = q.options.map((opt) => {
       const nN = nudge.filter((r) => r[q.id] === opt.value).length;
@@ -507,13 +532,20 @@ function renderSurveyCharts(surveys) {
           </div>
         </div>`;
     }).join("");
-    return `<div class="qblock"><div class="qtitle">${esc(q.title)}<span class="qid">${q.id}</span></div>${rows}</div>`;
+    return `<details class="qblock" data-q="${q.id}"${openQs.has(q.id) ? " open" : ""}>
+      <summary class="qtitle">${esc(q.title)}<span class="qid">${q.id}</span></summary>${rows}</details>`;
   }).join("");
 }
 
+function toggleQuestions(open) {
+  document.querySelectorAll("#surveyCharts details").forEach((d) => { d.open = open; });
+}
+
 function renderFreeText(surveys) {
+  let total = 0;
   const blocks = FREE_TEXT.map((f) => {
     const entries = surveys.filter((r) => (r[f.id] || "").trim());
+    total += entries.length;
     if (!entries.length) return "";
     return `<div class="qblock"><div class="qtitle">${esc(f.title)}</div>` +
       entries.map((r) => `
@@ -523,9 +555,11 @@ function renderFreeText(surveys) {
         </div>`).join("") + `</div>`;
   }).join("");
   $("freeText").innerHTML = blocks || `<div class="empty">No free-text comments match the current filters.</div>`;
+  $("freeTextCount").textContent = `(${total})`;
 }
 
 function renderTable(sessions) {
+  $("sessionCount").textContent = `(${sessions.length} — click a row to view its transcript)`;
   $("sessionRows").innerHTML = sessions.map((s) => {
     const flags = [s.is_test ? "test" : "", s.is_demo ? "demo" : "", s.chat_locked ? "" : "open"]
       .filter(Boolean).join(" · ");
