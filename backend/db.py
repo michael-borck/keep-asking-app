@@ -136,6 +136,32 @@ def list_sessions() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def admin_sessions() -> list[dict]:
+    """All sessions with every research-relevant column, for the admin UI."""
+    rows = get_conn().execute("""
+        SELECT s.session_code, s.condition, s.is_test, s.is_demo, s.created_at,
+               s.lab_id, s.campus, s.timezone, s.survey_completed, s.chat_locked,
+               s.first_in_family, s.low_ses,
+               COALESCE(MAX(t.turn_number), 0) AS turn_count
+        FROM sessions s
+        LEFT JOIN turns t ON t.session_code = s.session_code AND t.role = 'user'
+        GROUP BY s.session_code
+        ORDER BY s.created_at DESC
+    """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def admin_surveys() -> list[dict]:
+    """All survey responses joined with their session's condition and lab."""
+    rows = get_conn().execute("""
+        SELECT sr.*, s.condition, s.campus, s.lab_id AS session_lab_id
+        FROM survey_responses sr
+        JOIN sessions s ON s.session_code = sr.session_code
+        ORDER BY sr.timestamp_submitted
+    """).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Turn helpers
 # ---------------------------------------------------------------------------

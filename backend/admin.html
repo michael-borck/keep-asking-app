@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab Session Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:       #f9f9f7;
+    --surface:    #fcfcfb;
+    --ink:        #0b0b0b;
+    --ink-2:      #52514e;
+    --muted:      #898781;
+    --grid:       #e1e0d9;
+    --baseline:   #c3c2b7;
+    --border:     rgba(11,11,11,0.10);
+    --nudge:      #2a78d6;   /* categorical slot 1 (blue)   */
+    --control:    #eb6834;   /* categorical slot 2 (orange) */
+    --track:      #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:       #0d0d0d;
+      --surface:    #1a1a19;
+      --ink:        #ffffff;
+      --ink-2:      #c3c2b7;
+      --muted:      #898781;
+      --grid:       #2c2c2a;
+      --baseline:   #383835;
+      --border:     rgba(255,255,255,0.10);
+      --nudge:      #3987e5;
+      --control:    #d95926;
+      --track:      #262624;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+
+  /* ---- token gate ---- */
+  #gate {
+    max-width: 380px; margin: 15vh auto 0; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; padding: 28px;
+  }
+  #gate input {
+    width: 100%; padding: 9px 10px; margin: 14px 0 10px; font: inherit;
+    border: 1px solid var(--baseline); border-radius: 6px;
+    background: var(--page); color: var(--ink);
+  }
+  #gate .err { color: #d03b3b; font-size: 13px; min-height: 18px; }
+
+  button {
+    font: inherit; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--baseline); background: var(--surface); color: var(--ink);
+  }
+  button.primary { background: var(--nudge); border-color: var(--nudge); color: #fff; }
+  button:hover { filter: brightness(0.96); }
+
+  /* ---- header / filter row ---- */
+  .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .topbar .spacer { flex: 1; }
+  .filters {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+    padding: 12px 0 18px; font-size: 13px;
+  }
+  select {
+    font: inherit; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid var(--baseline); background: var(--surface); color: var(--ink);
+  }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; }
+
+  /* ---- cards / tiles ---- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .tile .k { font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .tile .v { font-size: 26px; font-weight: 600; }
+  .tile .d { font-size: 12px; color: var(--muted); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; margin-bottom: 20px;
+  }
+
+  /* ---- legend ---- */
+  .legend { display: flex; gap: 18px; font-size: 12px; color: var(--ink-2); margin-bottom: 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .swatch.nudge { background: var(--nudge); }
+  .swatch.control { background: var(--control); }
+
+  /* ---- horizontal paired bars ---- */
+  .qblock { padding: 14px 0; border-top: 1px solid var(--grid); }
+  .qblock:first-of-type { border-top: none; }
+  .qtitle { font-weight: 600; margin-bottom: 10px; }
+  .qtitle .qid { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .row { display: grid; grid-template-columns: 240px 1fr; gap: 12px; align-items: center; padding: 3px 0; }
+  .row .opt { font-size: 12.5px; color: var(--ink-2); text-align: right; }
+  .pair { display: flex; flex-direction: column; gap: 2px; }
+  .barline { display: flex; align-items: center; gap: 8px; height: 12px; }
+  .bar {
+    height: 10px; border-radius: 0 4px 4px 0; min-width: 2px;
+    transition: width .2s;
+  }
+  .bar.nudge { background: var(--nudge); }
+  .bar.control { background: var(--control); }
+  .barnum { font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* ---- histogram ---- */
+  .hist { display: flex; align-items: flex-end; gap: 18px; height: 150px; padding: 6px 4px 0; border-bottom: 1px solid var(--baseline); }
+  .hgroup { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; }
+  .hbar { width: 22px; border-radius: 4px 4px 0 0; min-height: 2px; position: relative; }
+  .hbar.nudge { background: var(--nudge); }
+  .hbar.control { background: var(--control); }
+  .hbar .hnum {
+    position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+    font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .hlabels { display: flex; gap: 18px; padding: 6px 4px 0; }
+  .hlabels div { flex: 1; text-align: center; font-size: 11.5px; color: var(--muted); }
+
+  /* ---- free text ---- */
+  .quote {
+    border-left: 3px solid var(--grid); padding: 4px 12px; margin: 10px 0;
+    color: var(--ink-2); font-size: 13px;
+  }
+  .quote .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pill {
+    display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 99px;
+    border: 1px solid var(--border); color: var(--ink-2); vertical-align: 1px;
+  }
+  .pill.nudge { border-color: var(--nudge); color: var(--nudge); }
+  .pill.control { border-color: var(--control); color: var(--control); }
+
+  /* ---- table ---- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--baseline);
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: var(--track); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .flag { color: var(--muted); font-size: 11px; }
+
+  /* ---- transcript modal ---- */
+  #modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none;
+    align-items: flex-start; justify-content: center; padding: 5vh 16px; z-index: 10;
+  }
+  #modal.open { display: flex; }
+  #modal .box {
+    background: var(--surface); border-radius: 12px; max-width: 760px; width: 100%;
+    max-height: 88vh; overflow-y: auto; padding: 22px 26px;
+  }
+  .turn { margin: 12px 0; }
+  .turn .who { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
+  .turn .txt { white-space: pre-wrap; }
+  .turn.user .txt { color: var(--ink); }
+  .turn.assistant_display .txt, .turn.assistant_raw .txt { color: var(--ink-2); }
+  .turn.system .txt { color: var(--muted); font-size: 12.5px; font-style: italic; }
+  .turn.assistant_raw { opacity: .65; }
+
+  .empty { color: var(--muted); font-style: italic; padding: 8px 0; }
+  #tooltip {
+    position: fixed; pointer-events: none; display: none; z-index: 20;
+    background: var(--ink); color: var(--page); font-size: 12px;
+    padding: 5px 9px; border-radius: 6px; max-width: 320px;
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>Lab Session Dashboard</h1>
+  <p class="sub">Enter the admin token to load session data.</p>
+  <input id="tokenInput" type="password" placeholder="Admin token" autocomplete="off">
+  <div class="err" id="gateErr"></div>
+  <button class="primary" onclick="saveToken()">Unlock</button>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <div class="topbar">
+    <div>
+      <h1>Lab Session Dashboard</h1>
+      <div class="sub" id="serverTime"></div>
+    </div>
+    <div class="spacer"></div>
+    <button onclick="downloadCSV('sessions')">Sessions CSV</button>
+    <button onclick="downloadCSV('surveys')">Surveys CSV</button>
+    <button onclick="loadData()">Refresh</button>
+    <button onclick="logout()" title="Forget token on this browser">Lock</button>
+  </div>
+
+  <div class="filters">
+    <label>Unit:&nbsp;<select id="unitFilter" onchange="render()"></select></label>
+    <label>Lab:&nbsp;<select id="labFilter" onchange="render()"></select></label>
+    <label class="chk"><input type="checkbox" id="includeTest" onchange="render()"> include test / demo sessions</label>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Conversation length <span class="sub">(user turns per real session)</span></h2>
+    <div class="legend">
+      <span><span class="swatch nudge"></span>Nudge</span>
+      <span><span class="swatch control"></span>Control</span>
+    </div>
+    <div class="hist" id="hist"></div>
+    <div class="hlabels" id="histLabels"></div>
+  </div>
+
+  <div class="card">
+    <h2>Exit survey responses <span class="sub" id="surveyCount"></span></h2>
+    <div class="legend">
+      <span><span class="swatch nudge"></span>Nudge</span>
+      <span><span class="swatch control"></span>Control</span>
+      <span class="sub">bars show % within condition; labels show raw counts</span>
+    </div>
+    <div id="surveyCharts"></div>
+  </div>
+
+  <div class="card">
+    <h2>Free-text comments</h2>
+    <div id="freeText"></div>
+  </div>
+
+  <div class="card">
+    <h2>Sessions <span class="sub">(click a row to view its transcript)</span></h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Code</th><th>Started (UTC)</th><th>Lab</th><th>Campus</th>
+          <th>Condition</th><th>Turns</th><th>Survey</th><th>Flags</th>
+        </tr></thead>
+        <tbody id="sessionRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="box">
+    <div class="topbar">
+      <div>
+        <h2 id="modalTitle" style="margin:0"></h2>
+        <div class="sub" id="modalMeta"></div>
+      </div>
+      <div class="spacer"></div>
+      <label class="chk" style="font-size:12px"><input type="checkbox" id="showRaw" onchange="renderTranscript()"> show raw (pre-nudge) AI turns</label>
+      <button onclick="closeModal()">Close</button>
+    </div>
+    <div id="transcript"></div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ */
+/* Survey question metadata (mirrors frontend/src/Survey.jsx)          */
+/* ------------------------------------------------------------------ */
+const LIKERT = (labels) => labels.map((l, i) => ({ value: String(i + 1), label: `${i + 1} — ${l}` }));
+const OPTS = (list) => list.map((o) => ({ value: o.v ?? o, label: o.l ?? o }));
+
+const QUESTIONS = [
+  { id: "q1", title: "Confidence that final output was accurate and well-reasoned",
+    options: LIKERT(["Not confident at all", "Slightly confident", "Moderately confident", "Quite confident", "Very confident"]) },
+  { id: "q2", title: "Satisfaction with quality of final output",
+    options: LIKERT(["Very unsatisfied", "Unsatisfied", "Neutral", "Satisfied", "Very satisfied"]) },
+  { id: "q3", title: "Did something the AI said seem wrong, incomplete, or surprising?",
+    options: OPTS(["Yes", "No", "Not sure"]) },
+  { id: "q4", title: "How they worked with the AI today",
+    options: OPTS([
+      { v: "I mostly accepted what the AI said and used it to build my response", l: "Mostly accepted" },
+      { v: "I sometimes pushed back or asked follow-up questions, but mostly accepted the responses", l: "Sometimes pushed back" },
+      { v: "I regularly pushed back, questioned, or extended the AI responses", l: "Regularly pushed back" },
+      { v: "I treated the AI as a thinking partner throughout - challenging it and building on its responses", l: "Thinking partner" },
+    ]) },
+  { id: "q5", title: "Directing the conversation vs following the AI",
+    options: LIKERT(["The AI mostly led, I followed", "The AI led more than I did", "About equal", "I led more than the AI", "I directed throughout"]) },
+  { id: "q6", title: "Was the AI tool helpful for the task?",
+    options: LIKERT(["Not helpful at all", "Slightly helpful", "Moderately helpful", "Quite helpful", "Extremely helpful"]) },
+  { id: "q7", title: "Did responses make them want to follow up or push back?",
+    options: OPTS([
+      { v: "Yes, frequently", l: "Yes, frequently" },
+      { v: "Yes, occasionally", l: "Yes, occasionally" },
+      { v: "No, the responses seemed complete and I accepted them", l: "No — seemed complete" },
+      { v: "No, I was unsure how to push back even if I wanted to", l: "No — unsure how" },
+    ]) },
+  { id: "q7a", title: "Noticed anything unusual about the AI's responses? (manipulation check)",
+    options: OPTS(["Yes", "No", "Not sure"]) },
+  { id: "q8", title: "How often they use AI tools for study or work",
+    options: OPTS(["Never", "Occasionally (a few times a month)", "Regularly (a few times a week)", "Daily"]) },
+  { id: "q9", title: "Typical prior approach when using AI",
+    options: OPTS([
+      { v: "I usually accept the first response and use it directly", l: "Accept first response" },
+      { v: "I sometimes ask follow-up questions but mostly accept responses", l: "Sometimes follow up" },
+      { v: "I regularly ask follow-up questions and push back on responses", l: "Regularly push back" },
+      { v: "I treat AI as a thinking partner - I always challenge and refine its responses", l: "Thinking partner" },
+    ]) },
+  { id: "q10", title: "Formal instruction on using AI tools",
+    options: OPTS(["Yes", "No", "Not sure"]) },
+  { id: "q11", title: "Year of study",
+    options: OPTS(["First year", "Second year", "Third year", "Fourth year or above", "Postgraduate coursework", "Postgraduate research"]) },
+  { id: "q12", title: "Primary discipline",
+    options: OPTS([
+      "Business Information Systems",
+      "Innovation, Entrepreneurship, Strategy and International Business",
+      "People, Culture and Organisations",
+      "Marketing",
+      "Logistics and Supply Chain Management",
+      "Tourism, Hospitality and Events",
+      "Other",
+    ]) },
+];
+const FREE_TEXT = [
+  { id: "q3a", title: "What seemed wrong or surprising (q3a)" },
+  { id: "q7b", title: "What they noticed about the responses (q7b)" },
+  { id: "q13", title: "Anything else (q13)" },
+];
+
+/* ------------------------------------------------------------------ */
+/* Auth + data loading                                                 */
+/* ------------------------------------------------------------------ */
+let DATA = null;
+const $ = (id) => document.getElementById(id);
+const token = () => localStorage.getItem("admin_token") || "";
+
+function saveToken() {
+  localStorage.setItem("admin_token", $("tokenInput").value.trim());
+  loadData();
+}
+function logout() {
+  localStorage.removeItem("admin_token");
+  location.reload();
+}
+window.addEventListener("DOMContentLoaded", () => {
+  $("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") saveToken(); });
+  if (token()) loadData();
+});
+
+async function loadData() {
+  try {
+    const res = await fetch(`/api/admin/summary?token=${encodeURIComponent(token())}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    DATA = await res.json();
+  } catch (e) {
+    $("gate").style.display = "block";
+    $("app").style.display = "none";
+    $("gateErr").textContent = e.message;
+    return;
+  }
+  $("gate").style.display = "none";
+  $("app").style.display = "block";
+  buildFilters();
+  render();
+}
+
+/* ------------------------------------------------------------------ */
+/* Filtering                                                           */
+/* ------------------------------------------------------------------ */
+function unitOf(labId) {
+  if (!labId) return "(no lab)";
+  const entry = DATA.labs.find((l) => l.lab_id === labId);
+  return (entry && entry.unit_code) || labId.split("-")[0];
+}
+
+function buildFilters() {
+  const units = [...new Set(DATA.sessions.map((s) => unitOf(s.lab_id)))].sort();
+  const labs = [...new Set(DATA.sessions.map((s) => s.lab_id || "(no lab)"))].sort();
+  const keepU = $("unitFilter").value, keepL = $("labFilter").value;
+  $("unitFilter").innerHTML = `<option value="">All units</option>` +
+    units.map((u) => `<option${u === keepU ? " selected" : ""}>${esc(u)}</option>`).join("");
+  $("labFilter").innerHTML = `<option value="">All labs</option>` +
+    labs.map((l) => `<option${l === keepL ? " selected" : ""}>${esc(l)}</option>`).join("");
+}
+
+function filteredSessions() {
+  const unit = $("unitFilter").value, lab = $("labFilter").value, incl = $("includeTest").checked;
+  return DATA.sessions.filter((s) =>
+    (incl || (!s.is_test && !s.is_demo)) &&
+    (!unit || unitOf(s.lab_id) === unit) &&
+    (!lab || (s.lab_id || "(no lab)") === lab));
+}
+function filteredSurveys() {
+  const codes = new Set(filteredSessions().map((s) => s.session_code));
+  return DATA.surveys.filter((r) => codes.has(r.session_code));
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendering                                                           */
+/* ------------------------------------------------------------------ */
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+const median = (a) => {
+  if (!a.length) return 0;
+  const s = [...a].sort((x, y) => x - y), m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+function render() {
+  const sessions = filteredSessions();
+  const surveys = filteredSurveys();
+  const real = sessions.filter((s) => !s.is_test && !s.is_demo);
+  const nudge = real.filter((s) => s.condition === "nudge");
+  const control = real.filter((s) => s.condition === "control");
+
+  $("serverTime").textContent =
+    `Server time ${DATA.server_time_utc.slice(0, 16).replace("T", " ")} UTC · data loads live from the study database`;
+
+  /* tiles */
+  const surveyed = real.filter((s) => s.survey_completed).length;
+  $("tiles").innerHTML = [
+    tile("Real sessions", real.length, sessions.length - real.length ? `+ ${sessions.length - real.length} test/demo shown` : ""),
+    tile("Nudge / Control", `${nudge.length} / ${control.length}`, "condition split"),
+    tile("Median turns", median(real.map((s) => s.turn_count)), "user messages per session"),
+    tile("Surveys completed", surveyed, real.length ? `${Math.round(100 * surveyed / real.length)}% of real sessions` : ""),
+  ].join("");
+
+  renderHistogram(nudge, control);
+  renderSurveyCharts(surveys);
+  renderFreeText(surveys);
+  renderTable(sessions);
+}
+
+function tile(k, v, d) {
+  return `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div></div>`;
+}
+
+/* -- histogram of user-turn counts, grouped by condition -- */
+const BUCKETS = [
+  { label: "0", test: (n) => n === 0 },
+  { label: "1–2", test: (n) => n >= 1 && n <= 2 },
+  { label: "3–4", test: (n) => n >= 3 && n <= 4 },
+  { label: "5–6", test: (n) => n >= 5 && n <= 6 },
+  { label: "7–9", test: (n) => n >= 7 && n <= 9 },
+  { label: "10+", test: (n) => n >= 10 },
+];
+function renderHistogram(nudge, control) {
+  const nCounts = BUCKETS.map((b) => nudge.filter((s) => b.test(s.turn_count)).length);
+  const cCounts = BUCKETS.map((b) => control.filter((s) => b.test(s.turn_count)).length);
+  const max = Math.max(1, ...nCounts, ...cCounts);
+  $("hist").innerHTML = BUCKETS.map((b, i) => `
+    <div class="hgroup">
+      <div class="hbar nudge" style="height:${(100 * nCounts[i] / max).toFixed(1)}%"
+           data-tip="Nudge · ${b.label} turns: ${nCounts[i]} session${nCounts[i] === 1 ? "" : "s"}">
+        <span class="hnum">${nCounts[i] || ""}</span></div>
+      <div class="hbar control" style="height:${(100 * cCounts[i] / max).toFixed(1)}%"
+           data-tip="Control · ${b.label} turns: ${cCounts[i]} session${cCounts[i] === 1 ? "" : "s"}">
+        <span class="hnum">${cCounts[i] || ""}</span></div>
+    </div>`).join("");
+  $("histLabels").innerHTML = BUCKETS.map((b) => `<div>${b.label}</div>`).join("");
+}
+
+/* -- per-question paired horizontal bars, % within condition -- */
+function renderSurveyCharts(surveys) {
+  const nudge = surveys.filter((r) => r.condition === "nudge");
+  const control = surveys.filter((r) => r.condition === "control");
+  $("surveyCount").textContent = `(${surveys.length} responses — nudge n=${nudge.length}, control n=${control.length})`;
+
+  if (!surveys.length) {
+    $("surveyCharts").innerHTML = `<div class="empty">No survey responses match the current filters.</div>`;
+    return;
+  }
+
+  $("surveyCharts").innerHTML = QUESTIONS.map((q) => {
+    const rows = q.options.map((opt) => {
+      const nN = nudge.filter((r) => r[q.id] === opt.value).length;
+      const cN = control.filter((r) => r[q.id] === opt.value).length;
+      const nP = nudge.length ? 100 * nN / nudge.length : 0;
+      const cP = control.length ? 100 * cN / control.length : 0;
+      return `
+        <div class="row">
+          <div class="opt" title="${esc(opt.value)}">${esc(opt.label)}</div>
+          <div class="pair">
+            <div class="barline">
+              <div class="bar nudge" style="width:${nP.toFixed(1)}%"
+                   data-tip="Nudge · ${esc(opt.label)}: ${nN} of ${nudge.length} (${nP.toFixed(0)}%)"></div>
+              <span class="barnum">${nN}</span>
+            </div>
+            <div class="barline">
+              <div class="bar control" style="width:${cP.toFixed(1)}%"
+                   data-tip="Control · ${esc(opt.label)}: ${cN} of ${control.length} (${cP.toFixed(0)}%)"></div>
+              <span class="barnum">${cN}</span>
+            </div>
+          </div>
+        </div>`;
+    }).join("");
+    return `<div class="qblock"><div class="qtitle">${esc(q.title)}<span class="qid">${q.id}</span></div>${rows}</div>`;
+  }).join("");
+}
+
+function renderFreeText(surveys) {
+  const blocks = FREE_TEXT.map((f) => {
+    const entries = surveys.filter((r) => (r[f.id] || "").trim());
+    if (!entries.length) return "";
+    return `<div class="qblock"><div class="qtitle">${esc(f.title)}</div>` +
+      entries.map((r) => `
+        <div class="quote">${esc(r[f.id])}
+          <div class="meta"><span class="pill ${esc(r.condition)}">${esc(r.condition)}</span>
+          &nbsp;${esc(r.session_lab_id || "no lab")}</div>
+        </div>`).join("") + `</div>`;
+  }).join("");
+  $("freeText").innerHTML = blocks || `<div class="empty">No free-text comments match the current filters.</div>`;
+}
+
+function renderTable(sessions) {
+  $("sessionRows").innerHTML = sessions.map((s) => {
+    const flags = [s.is_test ? "test" : "", s.is_demo ? "demo" : "", s.chat_locked ? "" : "open"]
+      .filter(Boolean).join(" · ");
+    return `
+      <tr class="clickable" onclick="openTranscript('${esc(s.session_code)}')">
+        <td class="mono">${esc(s.session_code)}</td>
+        <td>${esc((s.created_at || "").slice(0, 16).replace("T", " "))}</td>
+        <td>${esc(s.lab_id || "—")}</td>
+        <td>${esc(s.campus || "—")}</td>
+        <td><span class="pill ${esc(s.condition)}">${esc(s.condition)}</span></td>
+        <td>${s.turn_count}</td>
+        <td>${s.survey_completed ? "✓" : ""}</td>
+        <td class="flag">${esc(flags)}</td>
+      </tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">No sessions match the current filters.</td></tr>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Transcript modal                                                    */
+/* ------------------------------------------------------------------ */
+let TRANSCRIPT = null;
+async function openTranscript(code) {
+  const res = await fetch(`/api/admin/transcript/${encodeURIComponent(code)}?token=${encodeURIComponent(token())}`);
+  if (!res.ok) { alert("Could not load transcript"); return; }
+  TRANSCRIPT = await res.json();
+  $("modalTitle").textContent = code;
+  const s = TRANSCRIPT.session;
+  $("modalMeta").textContent =
+    `${s.condition} · ${s.lab_id || "no lab"} · ${s.campus || "campus unknown"} · started ${(s.created_at || "").slice(0, 16).replace("T", " ")} UTC`;
+  renderTranscript();
+  $("modal").classList.add("open");
+}
+function renderTranscript() {
+  if (!TRANSCRIPT) return;
+  const showRaw = $("showRaw").checked;
+  const WHO = { user: "Student", assistant_display: "AI (as shown to student)", assistant_raw: "AI (raw model output)", system: "System" };
+  const turns = TRANSCRIPT.turns.filter((t) => showRaw || t.role !== "assistant_raw");
+  $("transcript").innerHTML = turns.map((t) => `
+    <div class="turn ${esc(t.role)}">
+      <div class="who">${WHO[t.role] || esc(t.role)} · ${esc((t.timestamp || "").slice(11, 19))}</div>
+      <div class="txt">${esc(t.content)}</div>
+    </div>`).join("") || `<div class="empty">No logged turns (test or non-consenting session).</div>`;
+}
+function closeModal() { $("modal").classList.remove("open"); }
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+/* ------------------------------------------------------------------ */
+/* CSV export (client-side, respects current filters)                  */
+/* ------------------------------------------------------------------ */
+function downloadCSV(kind) {
+  const rows = kind === "sessions" ? filteredSessions() : filteredSurveys();
+  if (!rows.length) { alert("Nothing to export with the current filters."); return; }
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const cell = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => cell(r[c])).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tooltip layer                                                       */
+/* ------------------------------------------------------------------ */
+document.addEventListener("mousemove", (e) => {
+  const el = e.target.closest("[data-tip]");
+  const tip = $("tooltip");
+  if (!el) { tip.style.display = "none"; return; }
+  tip.textContent = el.getAttribute("data-tip");
+  tip.style.display = "block";
+  tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 340) + "px";
+  tip.style.top = (e.clientY + 14) + "px";
+});
+</script>
+</body>
+</html>

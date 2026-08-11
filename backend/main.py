@@ -13,6 +13,7 @@ Handles:
 Run: uvicorn main:app --reload --port 8000
 """
 
+import hmac
 import json
 import logging
 import os
@@ -43,6 +44,10 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
 # Secret token for bypassing session check (set in .env, use as ?token=<value>)
 TEST_TOKEN = os.getenv("TEST_TOKEN", "")
+
+# Secret token for the facilitator dashboard at /admin and the /api/admin/*
+# endpoints (set in .env). If unset, all admin access is disabled.
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 # Public demo mode (no token). When enabled, ?demo=1 opens a throwaway session that
 # writes nothing to the database, is pinned to a cheap model, and is capped at
@@ -292,6 +297,14 @@ class SurveyRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+def require_admin(token: str | None) -> None:
+    """Gate for admin/data endpoints. Constant-time compare, disabled if unset."""
+    if not ADMIN_TOKEN:
+        raise HTTPException(403, "Admin access is not configured (set ADMIN_TOKEN)")
+    if not token or not hmac.compare_digest(token, ADMIN_TOKEN):
+        raise HTTPException(403, "Invalid admin token")
+
+
 def generate_session_code() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
@@ -496,7 +509,8 @@ def chat(req: ChatRequest):
 
 
 @app.get("/api/sessions")
-def list_sessions():
+def list_sessions(token: str | None = Query(None)):
+    require_admin(token)
     rows = db.list_sessions()
     return {
         r["session_code"]: {
@@ -525,11 +539,46 @@ def get_history(session_code: str):
 
 
 @app.get("/api/export/{session_code}")
-def export_session(session_code: str):
+def export_session(session_code: str, token: str | None = Query(None)):
+    require_admin(token)
     transcript = db.get_full_transcript(session_code)
     if not transcript:
         raise HTTPException(404, "Session log not found")
     return transcript
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard (facilitator data exploration, gated by ADMIN_TOKEN)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/admin/summary")
+def admin_summary(token: str | None = Query(None)):
+    """Everything the /admin dashboard needs in one payload: the lab schedule
+    (for lab_id -> unit mapping), all sessions, and all survey responses.
+    Filtering/aggregation happens client-side — the dataset is small."""
+    require_admin(token)
+    return {
+        "server_time_utc": datetime.now(timezone.utc).isoformat(),
+        "labs": get_lab_sessions(),
+        "sessions": db.admin_sessions(),
+        "surveys": db.admin_surveys(),
+    }
+
+
+@app.get("/api/admin/transcript/{session_code}")
+def admin_transcript(session_code: str, token: str | None = Query(None)):
+    require_admin(token)
+    session = db.get_session(session_code)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    return {"session": session, "turns": db.get_full_transcript(session_code)}
+
+
+@app.get("/admin")
+def admin_page():
+    """Facilitator dashboard. The page itself is public; all data behind it
+    requires the admin token."""
+    return FileResponse(_BACKEND_DIR / "admin.html")
 
 
 # ---------------------------------------------------------------------------
