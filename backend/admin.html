@@ -225,7 +225,7 @@
   <div class="filters">
     <label>Unit:&nbsp;<select id="unitFilter" onchange="render()"></select></label>
     <label>Lab:&nbsp;<select id="labFilter" onchange="render()"></select></label>
-    <label class="chk"><input type="checkbox" id="includeTest" onchange="render()"> include test / demo sessions</label>
+    <label class="chk"><input type="checkbox" id="includeTest" onchange="render()"> include test sessions</label>
   </div>
 
   <div class="tiles" id="tiles"></div>
@@ -419,7 +419,7 @@ function buildFilters() {
 function filteredSessions() {
   const unit = $("unitFilter").value, lab = $("labFilter").value, incl = $("includeTest").checked;
   return DATA.sessions.filter((s) =>
-    (incl || (!s.is_test && !s.is_demo)) &&
+    (incl || !s.is_test) &&
     (!unit || unitOf(s.lab_id) === unit) &&
     (!lab || (s.lab_id || "(no lab)") === lab));
 }
@@ -444,7 +444,7 @@ const median = (a) => {
 function render() {
   const sessions = filteredSessions();
   const surveys = filteredSurveys();
-  const real = sessions.filter((s) => !s.is_test && !s.is_demo);
+  const real = sessions.filter((s) => !s.is_test);
   const nudge = real.filter((s) => s.condition === "nudge");
   const control = real.filter((s) => s.condition === "control");
 
@@ -454,7 +454,7 @@ function render() {
   /* tiles */
   const surveyed = real.filter((s) => s.survey_completed).length;
   $("tiles").innerHTML = [
-    tile("Real sessions", real.length, sessions.length - real.length ? `+ ${sessions.length - real.length} test/demo shown` : ""),
+    tile("Real sessions", real.length, sessions.length - real.length ? `+ ${sessions.length - real.length} test shown` : ""),
     tile("Nudge / Control", `${nudge.length} / ${control.length}`, "condition split"),
     tile("Median turns", median(real.map((s) => s.turn_count)), "user messages per session"),
     tile("Surveys completed", surveyed, real.length ? `${Math.round(100 * surveyed / real.length)}% of real sessions` : ""),
@@ -561,7 +561,7 @@ function renderFreeText(surveys) {
 function renderTable(sessions) {
   $("sessionCount").textContent = `(${sessions.length} — click a row to view its transcript)`;
   $("sessionRows").innerHTML = sessions.map((s) => {
-    const flags = [s.is_test ? "test" : "", s.is_demo ? "demo" : "", s.chat_locked ? "" : "open"]
+    const flags = [s.is_test ? "test" : "", s.chat_locked ? "" : "open"]
       .filter(Boolean).join(" · ");
     return `
       <tr class="clickable" onclick="openTranscript('${esc(s.session_code)}')">

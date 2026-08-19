@@ -137,14 +137,16 @@ def list_sessions() -> list[dict]:
 
 
 def admin_sessions() -> list[dict]:
-    """All sessions with every research-relevant column, for the admin UI."""
+    """All sessions with every research-relevant column, for the admin UI.
+    Public demo sessions carry no research data and are excluded entirely."""
     rows = get_conn().execute("""
-        SELECT s.session_code, s.condition, s.is_test, s.is_demo, s.created_at,
+        SELECT s.session_code, s.condition, s.is_test, s.created_at,
                s.lab_id, s.campus, s.timezone, s.survey_completed, s.chat_locked,
                s.first_in_family, s.low_ses,
                COALESCE(MAX(t.turn_number), 0) AS turn_count
         FROM sessions s
         LEFT JOIN turns t ON t.session_code = s.session_code AND t.role = 'user'
+        WHERE s.is_demo = 0
         GROUP BY s.session_code
         ORDER BY s.created_at DESC
     """).fetchall()
