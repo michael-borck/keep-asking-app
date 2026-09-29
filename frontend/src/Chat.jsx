@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const NUDGE_SEPARATOR = "\n\n---\n";
@@ -47,7 +49,7 @@ export default function Chat({ session, onFinish, onSessionState }) {
   }, [messages]);
 
   function parseResponse(text) {
-    const idx = text.indexOf(NUDGE_SEPARATOR);
+    const idx = text.lastIndexOf(NUDGE_SEPARATOR);
     if (idx === -1) {
       return { body: text, nudge: null };
     }
@@ -173,8 +175,16 @@ export default function Chat({ session, onFinish, onSessionState }) {
           const { body, nudge } = parseResponse(msg.content);
           return (
             <div key={i} className="message assistant">
-              {body}
-              {nudge && <span className="nudge">{nudge}</span>}
+              <div className="markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+              </div>
+              {nudge && (
+                <div className="nudge">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {nudge}
+                  </ReactMarkdown>
+                </div>
+              )}
             </div>
           );
         })}
